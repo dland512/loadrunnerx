@@ -1,0 +1,8 @@
+Load.v11.suo
+*.suo
+LoadRunner/bin/
+LoadRunner/obj/
+LoadRunner/Web References/
+Seed/bin/
+Seed/obj/
+Seed/Web References/

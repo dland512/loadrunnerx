@@ -1,6 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <StartArguments>-j 20157412499691 -o Partial -n 1 -u 1 -s 0:0 -d 0:0</StartArguments>
+    <StartArguments>-j 1234 -o Full -n 1 -u 2 -s 2:6 -d 10:15</StartArguments>
   </PropertyGroup>
 </Project>

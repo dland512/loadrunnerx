@@ -68,10 +68,10 @@ namespace LoadRunner
 
             Init();
 
-            List<Task> tasks = GetTasks();
-            Console.WriteLine("have {0} tasks that are being started", tasks.Count);
-            StartTasks(tasks);
-            Task.WaitAll(tasks.ToArray());
+            List<Thread> threads = GetThreads();
+            Console.WriteLine("have {0} threads that are being started", threads.Count);
+            threads.ForEach(t => t.Start());
+            threads.ForEach(t => t.Join());
 
             OutputResults();
 
@@ -137,33 +137,33 @@ namespace LoadRunner
         }
 
 
-        private static List<Task> GetTasks()
+        private static List<Thread> GetThreads()
         {
-            List<Task> tasks = new List<Task>();
+            List<Thread> threads = new List<Thread>();
 
             for (int i = 0; i < parsedArgs.NumUsers; i++)
             {
                 switch (parsedArgs.Op)
                 {
                     case CommandLineArgs.Operation.Full:
-                        tasks.Add(new Task(() => SetupFullRefresh(parsedArgs.NumOps)));
+                        threads.Add(new Thread(SetupFullRefresh));
                         break;
 
                     case CommandLineArgs.Operation.Partial:
-                        tasks.Add(new Task(() => SetupPartialRefresh(parsedArgs.NumOps)));
+                        threads.Add(new Thread(SetupPartialRefresh));
                         break;
 
                     case CommandLineArgs.Operation.Pipe:
-                        tasks.AddRange(SetupPipeInserts());
+                        //threads.AddRange(SetupPipeInserts());
                         break;
 
                     case CommandLineArgs.Operation.Weld:
-                        tasks.AddRange(SetupWeldInserts());
+                        //threads.AddRange(SetupWeldInserts());
                         break;
                 }
             }
 
-            return tasks;
+            return threads;
         }
 
 
@@ -183,7 +183,7 @@ namespace LoadRunner
         }
 
 
-        private static void SetupFullRefresh(int numTimes)
+        private static void SetupFullRefresh()
         {
             int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
             Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
@@ -192,12 +192,12 @@ namespace LoadRunner
 
             Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
 
-            for (int i = 0; i < numTimes; i++)
+            for (int i = 0; i < parsedArgs.NumOps; i++)
                 FullRefresh();
         }
 
 
-        private static void SetupPartialRefresh(int numTimes)
+        private static void SetupPartialRefresh()
         {
             int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
             Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
@@ -206,7 +206,7 @@ namespace LoadRunner
 
             Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
 
-            for (int i = 0; i < numTimes; i++)
+            for (int i = 0; i < parsedArgs.NumOps; i++)
                 PartialRefresh();
         }
 

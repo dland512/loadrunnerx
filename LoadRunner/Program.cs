@@ -18,17 +18,23 @@ namespace LoadRunner
     {
         public enum Operation { Full, Partial, Pipe, Weld, Map };
 
+        [Option('u', "username", Required = true, HelpText = "Username for web service calls")]
+        public string Username { get; set; }
+
+        [Option('p', "password", Required = true, HelpText = "Password for web service calls")]
+        public string Password { get; set; }
+
         [Option('j', "jobs", Required = true, HelpText = "Comma separated list of job IDs")]
         public string JobIDs { get; set; }
 
         [Option('o', "operations", Required = true, HelpText = "Comma separated list of operation to run. Options are Refresh, Pipe, Weld, Map")]
         public Operation Op { get; set; }
 
-        [Option('n', "numoperations", Required = true, HelpText = "Number of operations each user will perform")]
+        [Option('n', "numops", Required = true, HelpText = "Number of operations each thread will perform")]
         public int NumOps { get; set; }
 
-        [Option('u', "numusers", Required = true, HelpText = "Number of users")]
-        public int? NumUsers { get; set; }
+        [Option('t', "numthreads", Required = true, HelpText = "Number of threads")]
+        public int? NumThreads { get; set; }
 
         [Option('s', "stagger", Required = true, HelpText = "Stagger users by min:max seconds")]
         public string StaggerUsers { get; set; }
@@ -126,7 +132,7 @@ namespace LoadRunner
 
             Console.WriteLine();
             Console.WriteLine("starting tasks...");
-            Console.WriteLine("   users: {0}", parsedArgs.NumUsers);
+            Console.WriteLine("   users: {0}", parsedArgs.NumThreads);
             Console.WriteLine("   operation: {0}", parsedArgs.Op);
             Console.WriteLine("   number of operations per user: {0}", parsedArgs.NumOps);
             Console.WriteLine("   start time staggering: {0}", parsedArgs.StaggerUsers);
@@ -141,7 +147,7 @@ namespace LoadRunner
         {
             List<Thread> threads = new List<Thread>();
 
-            for (int i = 0; i < parsedArgs.NumUsers; i++)
+            for (int i = 0; i < parsedArgs.NumThreads; i++)
             {
                 switch (parsedArgs.Op)
                 {
@@ -177,7 +183,7 @@ namespace LoadRunner
         private static MainService GetService()
         {
             MainService service = new MainService();
-            service.ServiceHeaderValue = new ServiceHeader() { Username = "loaduser", Password = "x", ApiVersion = "release7" };
+            service.ServiceHeaderValue = new ServiceHeader() { Username = parsedArgs.Username, Password = parsedArgs.Password, ApiVersion = "release7" };
             service.Timeout = 100000000;
             return service;
         }
@@ -215,7 +221,7 @@ namespace LoadRunner
         {
             List<Task> tasks = new List<Task>();
 
-            for (int i = 0; i < parsedArgs.NumUsers; i++)
+            for (int i = 0; i < parsedArgs.NumThreads; i++)
                 tasks.Add(new Task(() => PipeInserts()));
 
             return tasks;
@@ -226,7 +232,7 @@ namespace LoadRunner
         {
             List<Task> tasks = new List<Task>();
 
-            for (int i = 0; i < parsedArgs.NumUsers; i++)
+            for (int i = 0; i < parsedArgs.NumThreads; i++)
                 tasks.Add(new Task(() => WeldInserts()));
 
             return tasks;
@@ -281,7 +287,7 @@ namespace LoadRunner
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            string dateTime = "2015-08-13 17:20:00";
+            string dateTime = "2015-08-14 11:21:00";
             string where = string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}", dateTime, vendorID, job.JobID);
             string sortField = "Pipe_ID";
             string sortDir = "ASC";
@@ -477,66 +483,69 @@ namespace LoadRunner
 
             DataSet dataSet = new DataSet();
             DataTable dt = new DataTable();
-            dt.Columns.Add("Name", typeof(string));
-            dt.Columns.Add("Counter", typeof(int));
+            dt.Columns.Add("Seconds", typeof(double));
+            dt.Columns.Add("RequestCount", typeof(int));
 
             Dictionary<int, int> timeTable = new Dictionary<int, int>();
 
+            List<DataRow> rows = new List<DataRow>();
+
             foreach (double time in requestTimes)
             {
-                int iTime = (int)time;
+                DataRow row = rows.FirstOrDefault(r => ((double)r[0]) == time);
 
-                if (!timeTable.ContainsKey(iTime))
-                    timeTable.Add(iTime, 0);
+                if (row == null)
+                {
+                    row = dt.NewRow();
+                    row[0] = time;
+                    row[1] = 0;
+                    rows.Add(row);
+                }
 
-                timeTable[iTime]++;
+                row[1] = ((int)row[1]) + 1;
             }
 
-            foreach (KeyValuePair<int, int> t in timeTable.OrderBy(t => t.Key))
-            {
-                DataRow row = dt.NewRow();
-                row[0] = t.Key;
-                row[1] = t.Value;
-                dt.Rows.Add(row);
-            }
+            rows.ForEach(r => dt.Rows.Add(r));
 
             dataSet.Tables.Add(dt);
 
-            //prepare chart control...
             Chart chart = new Chart();
             chart.DataSource = dataSet.Tables[0];
-            chart.Width = 600;
-            chart.Height = 350;
-            //create serie...
-            Series serie1 = new Series();
-            serie1.Name = "Serie1";
-            serie1.Color = Color.FromArgb(112, 255, 200);
-            serie1.BorderColor = Color.FromArgb(164, 164, 164);
-            serie1.ChartType = SeriesChartType.Column;
-            serie1.BorderDashStyle = ChartDashStyle.Solid;
-            serie1.BorderWidth = 1;
-            serie1.ShadowColor = Color.FromArgb(128, 128, 128);
-            serie1.ShadowOffset = 1;
-            serie1.IsValueShownAsLabel = true;
-            serie1.XValueMember = "Name";
-            serie1.YValueMembers = "Counter";
-            serie1.Font = new Font("Tahoma", 8.0f);
-            serie1.BackSecondaryColor = Color.FromArgb(0, 102, 153);
-            serie1.LabelForeColor = Color.FromArgb(100, 100, 100);
-            chart.Series.Add(serie1);
-            //create chartareas...
+            chart.Width = 900;
+            chart.Height = 500;
+
+            Series series = new Series();
+            series.Name = "Serie1";
+            series.Color = Color.FromArgb(220, 0, 27);
+            series.ChartType = SeriesChartType.Column;
+            series.ShadowOffset = 0;
+            series.IsValueShownAsLabel = true;
+            series.XValueMember = "Seconds";
+            series.YValueMembers = "RequestCount";
+            series.Font = new Font(series.Font.FontFamily, 10);
+            chart.Series.Add(series);
+            
             ChartArea ca = new ChartArea();
             ca.Name = "ChartArea1";
             ca.BackColor = Color.White;
-            ca.BorderColor = Color.FromArgb(26, 59, 105);
             ca.BorderWidth = 0;
-            ca.BorderDashStyle = ChartDashStyle.Solid;
             ca.AxisX = new Axis();
             ca.AxisY = new Axis();
+            ca.AxisX.Title = "Time (seconds)";
+            Font f = ca.AxisX.TitleFont;
+            ca.AxisX.TitleFont = new Font(f.FontFamily, 12, f.Style);
+            ca.AxisY.Title = "Request count";
+            ca.AxisY.TitleFont = ca.AxisX.TitleFont;
+            ca.AxisX.MajorGrid.LineColor = Color.LightGray;
+            ca.AxisY.MajorGrid.LineColor = ca.AxisX.MajorGrid.LineColor;
             chart.ChartAreas.Add(ca);
-            //databind...
+
+            chart.Titles.Add("Requests times");
+            chart.Titles.Add("some really long title\nand more info\nand even more info");
+            chart.Titles[0].Font = ca.AxisX.TitleFont;
+            
             chart.DataBind();
-            //save result...
+            
             chart.SaveImage(@"chart.png", ChartImageFormat.Png);
         }
     }

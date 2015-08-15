@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup Condition="'$(Configuration)|$(Platform)' == 'Debug|AnyCPU'">
-    <StartArguments>-d PipeTrackerLocal -v 24 -j 20157412499691 -p  1 -w 1 -l 1</StartArguments>
+    <StartArguments>-d PipeTrackerLocal -v 24 -j 20153592436714 -p  50000 -w 50000 -l 5000</StartArguments>
   </PropertyGroup>
   <PropertyGroup>
     <ProjectView>ShowAllFiles</ProjectView>

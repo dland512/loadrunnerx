@@ -11,12 +11,14 @@ using CommandLine.Text;
 using LoadRunner.localhost;
 using System.Drawing;
 using System.Threading;
+using System.Configuration;
+using System.IO;
 
 namespace LoadRunner
 {
     public class CommandLineArgs
     {
-        public enum Operation { Full, Partial, Pipe, Weld, Map };
+        public enum Operation { Full, Partial, PipeUpdate };
 
         [Option('u', "username", Required = true, HelpText = "Username for web service calls")]
         public string Username { get; set; }
@@ -24,10 +26,10 @@ namespace LoadRunner
         [Option('p', "password", Required = true, HelpText = "Password for web service calls")]
         public string Password { get; set; }
 
-        [Option('j', "jobs", Required = true, HelpText = "Comma separated list of job IDs")]
-        public string JobIDs { get; set; }
+        [Option('j', "job", Required = true, HelpText = "Job ID")]
+        public long JobID { get; set; }
 
-        [Option('o', "operations", Required = true, HelpText = "Comma separated list of operation to run. Options are Refresh, Pipe, Weld, Map")]
+        [Option('o', "operation", Required = true, HelpText = "Operation to run. Options are Refresh, Pipe, Weld, Map")]
         public Operation Op { get; set; }
 
         [Option('n', "numops", Required = true, HelpText = "Number of operations each thread will perform")]
@@ -41,6 +43,9 @@ namespace LoadRunner
 
         [Option('d', "downtime", Required = true, HelpText = "Seconds between requests min:max")]
         public string DownTimeSec { get; set; }
+
+        [Option('r', "refreshdate", Required = false, HelpText = "Partial refresh date/time (e.g. 2015-08-14 11:21:00)")]
+        public string PartialRefreshDate { get; set; }
     }
 
 
@@ -50,15 +55,14 @@ namespace LoadRunner
         private static CommandLineArgs parsedArgs;
         private static List<TimeSpan> requestTimes = new List<TimeSpan>();
         private static MainService service;
-        private static List<long> vendorIDs = new List<long>();
-        private static List<Job> jobs = new List<Job>();
-        private static Dictionary<long, long> vendorToJob = new Dictionary<long, long>();
+        private static Job job;
         private static Dictionary<long, int> jobNumPages = new Dictionary<long, int>();
         private static int staggerMin;
         private static int staggerMax;
         private static int downMin;
         private static int downMax;
         private static Dictionary<long, List<Task>> userTasks = new Dictionary<long, List<Task>>();
+        private static List<Pipe> pipesToUpdate = new List<Pipe>();
         
 
         static void Main(string[] args)
@@ -92,35 +96,26 @@ namespace LoadRunner
             service = GetService();
             Console.WriteLine("    {0}", service.Url);
 
-            List<long> jobIDs = new List<long>();
-
-            foreach (string jid in parsedArgs.JobIDs.Split(','))
-                jobIDs.Add(long.Parse(jid));
-
             Console.WriteLine("done");
             Console.WriteLine();
 
             //associate the vendors supplied to jobs supplied
             Console.WriteLine("getting jobs...");
 
-            foreach (long jobID in jobIDs)
-            {
-                Job job = service.SelectJob(jobID);
-                Console.WriteLine("   {0} ({1})", job.Name, job.JobID);
-                jobs.Add(job);
-            }
+            job = service.SelectJob(parsedArgs.JobID);
+            Console.WriteLine("   {0} ({1})", job.Name, job.JobID);
 
             Console.WriteLine();
 
             //get the number of 1000 pipe pages required for a full refresh for each job
-            Console.WriteLine("getting pipe counts under jobs...");
-            foreach (Job job in jobs)
-            {
-                int total;
-                service.SelectPipes(string.Format("WHERE P.Job_ID = {0}", job.JobID), "P.Pipe_ID", "ASC", "0", "1", out total);
-                Console.WriteLine("   {0} has {1} pipes", job.Name, total);
-                jobNumPages[job.JobID] = (int)Math.Ceiling(total / 1000.0);
-            }
+            Console.WriteLine("getting pipe counts under job...");
+
+            int total;
+            Pipe[] pipes = service.SelectPipes(string.Format("WHERE P.Vendor_ID = {0} AND P.Job_ID = {1}", job.VendorID, job.JobID),
+                "P.Pipe_ID", "ASC", "0", "1", out total);
+            Console.WriteLine("   {0} has {1} pipes", job.Name, total);
+            jobNumPages[job.JobID] = (int)Math.Ceiling(total / 1000.0);
+            job.PipeCount = total;
 
             string[] staggerMinMax = parsedArgs.StaggerUsers.Split(':');
             staggerMin = int.Parse(staggerMinMax[0]);
@@ -129,6 +124,10 @@ namespace LoadRunner
             string[] downMinMax = parsedArgs.DownTimeSec.Split(':');
             downMin = int.Parse(downMinMax[0]);
             downMax = int.Parse(downMinMax[1]);
+
+            //add 1000 random pipes to be the ones for updating
+            for (int i = 0; i < 1000; i++)
+                pipesToUpdate.Add(pipes[rand.Next(0, pipes.Length)]);
 
             Console.WriteLine();
             Console.WriteLine("starting tasks...");
@@ -159,12 +158,8 @@ namespace LoadRunner
                         threads.Add(new Thread(SetupPartialRefresh));
                         break;
 
-                    case CommandLineArgs.Operation.Pipe:
-                        //threads.AddRange(SetupPipeInserts());
-                        break;
-
-                    case CommandLineArgs.Operation.Weld:
-                        //threads.AddRange(SetupWeldInserts());
+                    case CommandLineArgs.Operation.PipeUpdate:
+                        threads.Add(new Thread(SetupPipeUpdates));
                         break;
                 }
             }
@@ -183,6 +178,7 @@ namespace LoadRunner
         private static MainService GetService()
         {
             MainService service = new MainService();
+            service.Url = ConfigurationManager.AppSettings["ServiceUrl"];
             service.ServiceHeaderValue = new ServiceHeader() { Username = parsedArgs.Username, Password = parsedArgs.Password, ApiVersion = "release7" };
             service.Timeout = 100000000;
             return service;
@@ -217,31 +213,17 @@ namespace LoadRunner
         }
 
 
-        private static List<Task> SetupPipeInserts()
+
+        private static void SetupPipeUpdates()
         {
-            List<Task> tasks = new List<Task>();
+            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
+            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
+            System.Threading.Thread.Sleep(staggerTime);
 
-            for (int i = 0; i < parsedArgs.NumThreads; i++)
-                tasks.Add(new Task(() => PipeInserts()));
+            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
 
-            return tasks;
-        }
-
-
-        private static List<Task> SetupWeldInserts()
-        {
-            List<Task> tasks = new List<Task>();
-
-            for (int i = 0; i < parsedArgs.NumThreads; i++)
-                tasks.Add(new Task(() => WeldInserts()));
-
-            return tasks;
-        }
-
-
-        private static Job GetRandomJob()
-        {
-            return jobs[rand.Next(0, jobs.Count)];
+            for (int i = 0; i < parsedArgs.NumOps; i++)
+                PipeUpdate();
         }
 
 
@@ -250,7 +232,6 @@ namespace LoadRunner
             Console.WriteLine("Full refresh");
 
             int total;
-            Job job = GetRandomJob();
             long vendorID = job.VendorID;
             long numPages = jobNumPages[job.JobID];
 
@@ -279,22 +260,26 @@ namespace LoadRunner
 
         private static void PartialRefresh()
         {
+            DateTime d;
+            if (string.IsNullOrEmpty(parsedArgs.PartialRefreshDate) || !DateTime.TryParse(parsedArgs.PartialRefreshDate, out d))
+                throw new ArgumentException("Invalid partial refresh date: " + parsedArgs.PartialRefreshDate);
+
             int total;
-            Job job = GetRandomJob();
             long vendorID = job.VendorID;
             long numPages = jobNumPages[job.JobID];
 
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            string dateTime = "2015-08-14 11:21:00";
-            string where = string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}", dateTime, vendorID, job.JobID);
+            string where = string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}",
+                parsedArgs.PartialRefreshDate, vendorID, job.JobID);
             string sortField = "Pipe_ID";
             string sortDir = "ASC";
             string page = "0";
             string pageSize = "1000000";
 
             Console.WriteLine("running partial refresh for Job {0}", job.Name);
+            service.AcceptCachedData = false;
             Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, page, pageSize, out total);
 
             watch.Stop();
@@ -315,6 +300,27 @@ namespace LoadRunner
 
             Console.WriteLine(service.Url);
             service.InsertAndUpdatePipeWithMultipleBarcodes(GeneratePipe());
+
+            watch.Stop();
+            requestTimes.Add(watch.Elapsed);
+
+            DownTime();
+        }
+
+
+        private static void PipeUpdate()
+        {
+            Console.WriteLine("Pipe update");
+            Pipe pipe = pipesToUpdate[rand.Next(0, pipesToUpdate.Count)];
+            pipe.Image = string.Empty;
+            pipe.Thumbnail = string.Empty;
+            pipe.Alert = "new alert!";
+
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+
+            Console.WriteLine(service.Url);
+            service.UpdatePipe(pipe);
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
@@ -361,8 +367,6 @@ namespace LoadRunner
         {
             Random rand = new Random();
             long pipeID = NextInt64(rand);
-
-            Job job = GetRandomJob();
 
             Pipe pipe = new Pipe()
             {
@@ -467,32 +471,30 @@ namespace LoadRunner
 
             avgTime /= requestTimes.Count;
 
-            Console.WriteLine("total time: {0}, {1}", fullTime, fullTime.TotalMilliseconds);
-            Console.WriteLine("min request time: {0}", minTime);
-            Console.WriteLine("max request time: {0}", maxTime);
-            Console.WriteLine("average request time: {0}", avgTime);
+            Console.WriteLine("total time: {0}", fullTime.ToString("g"));
+            Console.WriteLine("min request time: {0}", FormatTime(minTime));
+            Console.WriteLine("max request time: {0}", FormatTime(maxTime));
+            Console.WriteLine("average request time: {0}", FormatTime(avgTime));
 
-            SaveChart(requestTimes.Select(t => t.TotalSeconds).ToList());
+            SaveChart(requestTimes.Select(t => t.TotalMilliseconds).ToList(), fullTime, minTime, maxTime, avgTime);
         }
 
 
-        private static void SaveChart(List<double> requestTimes)
+        private static void SaveChart(List<double> requestTimes, TimeSpan totalTime, double minTime, double maxTime, double avgTime)
         {
-            int min = (int)requestTimes.Min();
-            int max = (int)requestTimes.Max();
-
             DataSet dataSet = new DataSet();
             DataTable dt = new DataTable();
-            dt.Columns.Add("Seconds", typeof(double));
+            dt.Columns.Add("Seconds", typeof(int));
             dt.Columns.Add("RequestCount", typeof(int));
 
             Dictionary<int, int> timeTable = new Dictionary<int, int>();
 
             List<DataRow> rows = new List<DataRow>();
+            List<int> intTimes = requestTimes.OrderBy(t => t).Select(t => (int)Math.Round(t/1000)).ToList();
 
-            foreach (double time in requestTimes)
+            foreach (int time in intTimes)
             {
-                DataRow row = rows.FirstOrDefault(r => ((double)r[0]) == time);
+                DataRow row = rows.FirstOrDefault(r => ((int)r[0]) == time);
 
                 if (row == null)
                 {
@@ -541,12 +543,37 @@ namespace LoadRunner
             chart.ChartAreas.Add(ca);
 
             chart.Titles.Add("Requests times");
-            chart.Titles.Add("some really long title\nand more info\nand even more info");
             chart.Titles[0].Font = ca.AxisX.TitleFont;
+            chart.Titles.Add(GetChartDescriptionString(totalTime, minTime, maxTime, avgTime));
+            chart.Titles[1].Font = new Font(chart.Titles[1].Font.FontFamily, 10);
             
             chart.DataBind();
             
-            chart.SaveImage(@"chart.png", ChartImageFormat.Png);
+            int i = 0;
+            string fileName = "";
+
+            //loop until you find a free file name (in case multiple instances are running at the same time)
+            do
+            {
+                fileName = string.Format("chart-{0}.png", i++);
+            }
+            while(File.Exists(fileName));
+
+            chart.SaveImage(fileName, ChartImageFormat.Png);
+        }
+
+
+        private static string FormatTime(double milliseconds)
+        {
+            return new TimeSpan(0, 0, 0, 0, (int)milliseconds).ToString(@"hh\:mm\:ss\.ff");
+        }
+
+        private static string GetChartDescriptionString(TimeSpan totalTime, double minTime, double maxTime, double avgTime)
+        {
+            return string.Format("job: {0}, num pipes: {1},   threads: {2},   op: {3},   op count: {4},   stagger: {5},   downtime: {6}\n" +
+                "num requests: {7},   total time: {8},   min request: {9},   max request: {10},   avg request: {11}", job.Name, job.PipeCount,
+                parsedArgs.NumThreads, parsedArgs.Op, parsedArgs.NumOps, parsedArgs.StaggerUsers, parsedArgs.DownTimeSec, requestTimes.Count,
+                totalTime.ToString(@"hh\:mm\:ss\.ff"), FormatTime(minTime), FormatTime(maxTime), FormatTime(avgTime));
         }
     }
 }

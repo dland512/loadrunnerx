@@ -5,6 +5,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LoadRunner", "LoadRunner\Lo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Seed", "Seed\Seed.csproj", "{94BE1FF4-1773-49BF-8AA6-675752D73824}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PreCacher", "PreCacher\PreCacher.csproj", "{B2CBB568-E0B9-4321-A513-2A8E355E18F2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -19,6 +21,10 @@ Global
 		{94BE1FF4-1773-49BF-8AA6-675752D73824}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{94BE1FF4-1773-49BF-8AA6-675752D73824}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{94BE1FF4-1773-49BF-8AA6-675752D73824}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B2CBB568-E0B9-4321-A513-2A8E355E18F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B2CBB568-E0B9-4321-A513-2A8E355E18F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B2CBB568-E0B9-4321-A513-2A8E355E18F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B2CBB568-E0B9-4321-A513-2A8E355E18F2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

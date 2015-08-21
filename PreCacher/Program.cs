@@ -67,8 +67,9 @@ namespace PreCacher
                 DateTime end = GetDateTimeToHour(now);
                 cacher.CacheData(parsedArgs.VendorID, parsedArgs.JobID, start, end);
 
-                //wait some number of minutes
-                Thread.Sleep(parsedArgs.RepeatMin * 60 * 1000);
+                //wait until the top of the next hour
+                Thread.Sleep(TimeUntilNextHour());
+                //Thread.Sleep(parsedArgs.RepeatMin * 60 * 1000);
             }
         }
 

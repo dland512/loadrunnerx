@@ -46,6 +46,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="WeldPartType.cs" />
     <Compile Include="JointImageData.cs" />
     <Compile Include="JointStencilData.cs" />
     <Compile Include="LoadImage.cs" />

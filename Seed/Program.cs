@@ -50,6 +50,7 @@ namespace Seed
         private const string WELD_FILE = "welds.txt";
         private const string WELD_PASS_FILE = "passes.txt";
         private const string WELD_PASS_DOC_FILE = "passdocs.txt";
+        private const string WELD_PASS_TYPE_FILE = "passtypes.txt";
         private const string WELD_INSP_FILE = "inspections.txt";
         private const string WELD_INSP_DOC_FILE = "inspdocs.txt";
         private const string LOAD_FILE = "loads.txt";
@@ -144,7 +145,6 @@ namespace Seed
                     long pipe1ID = pipeIDs[p];
                     p = (p + 1) % pipeIDs.Count;
                     long pipe2ID = pipeIDs[p];
-                    p = (p + 1) % pipeIDs.Count;
                     Weld weld = GenerateWeld(pipe1ID, pipe2ID);
 
                     sw.WriteLine(weld.BulkInsertLine);
@@ -165,6 +165,13 @@ namespace Seed
                         parts.Add(part);
                     }
                 }
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_PASS_TYPE_FILE))
+            {
+                foreach (WeldPart part in parts)
+                    foreach (WeldPartType type in part.Types)
+                        sw.WriteLine(type.BulkInsertLine);
             }
 
             using (StreamWriter sw = File.CreateText(WELD_PASS_DOC_FILE))
@@ -391,7 +398,11 @@ namespace Seed
                 Position2 = "right",
                 WelderName = "Rock Strongo",
                 VisualInspectionPassed = true,
-                Types = new WeldPartType[] { new WeldPartType() { Type = "Branch", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() } }
+                Types = new WeldPartType[]
+                {
+                    new WeldPartType() { Type = "Branch", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() },
+                    new WeldPartType() { Type = "Butt", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() }
+                }
             };
 
             weldPart.WeldPartDocuments = new WeldPartDocument[] { GenerateWeldPartDoc(weldPart.WeldPartID) };

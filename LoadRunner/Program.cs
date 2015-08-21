@@ -18,7 +18,7 @@ namespace LoadRunner
 {
     public class CommandLineArgs
     {
-        public enum Operation { Full, Partial, PipeUpdate };
+        public enum Operation { Full, Partial, Partial2, PartialRandom, PipeUpdate };
 
         [Option('u', "username", Required = true, HelpText = "Username for web service calls")]
         public string Username { get; set; }
@@ -63,6 +63,7 @@ namespace LoadRunner
         private static int downMax;
         private static Dictionary<long, List<Task>> userTasks = new Dictionary<long, List<Task>>();
         private static List<Pipe> pipesToUpdate = new List<Pipe>();
+        static LocalDataStoreSlot lastUpdatedSlot = Thread.AllocateNamedDataSlot("LastUpdated");
         
 
         static void Main(string[] args)
@@ -112,7 +113,7 @@ namespace LoadRunner
 
             int total;
             Pipe[] pipes = service.SelectPipes(string.Format("WHERE P.Vendor_ID = {0} AND P.Job_ID = {1}", job.VendorID, job.JobID),
-                "P.Pipe_ID", "ASC", "0", "1", out total);
+                "P.Pipe_ID", "ASC", "0", "1000", out total);
             Console.WriteLine("   {0} has {1} pipes", job.Name, total);
             jobNumPages[job.JobID] = (int)Math.Ceiling(total / 1000.0);
             job.PipeCount = total;
@@ -156,6 +157,14 @@ namespace LoadRunner
 
                     case CommandLineArgs.Operation.Partial:
                         threads.Add(new Thread(SetupPartialRefresh));
+                        break;
+
+                    case CommandLineArgs.Operation.Partial2:
+                        threads.Add(new Thread(SetupPartialRefresh2));
+                        break;
+
+                    case CommandLineArgs.Operation.PartialRandom:
+                        threads.Add(new Thread(SetupPartialRandom));
                         break;
 
                     case CommandLineArgs.Operation.PipeUpdate:
@@ -213,6 +222,38 @@ namespace LoadRunner
         }
 
 
+        private static void SetupPartialRefresh2()
+        {
+            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
+            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
+
+            System.Threading.Thread.Sleep(staggerTime);
+
+            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
+
+            for (int i = 0; i < parsedArgs.NumOps; i++)
+                PartialRefresh2();
+        }
+
+
+        private static void SetupPartialRandom()
+        {
+            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
+            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
+
+            System.Threading.Thread.Sleep(staggerTime);
+
+            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
+
+            for (int i = 0; i < parsedArgs.NumOps; i++)
+            {
+                PartialRefreshRandom();
+                Console.WriteLine();
+                Console.WriteLine(i);
+                Console.WriteLine();
+            }
+        }
+
 
         private static void SetupPipeUpdates()
         {
@@ -246,6 +287,7 @@ namespace LoadRunner
                 string pageSize = "1000";
 
                 Console.WriteLine("Full refresh: getting page {0} for Job {1}", i, job.JobID);
+                service.AcceptCachedData = false;
                 Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, i.ToString(), pageSize, out total);
 
                 watch.Stop();
@@ -288,6 +330,101 @@ namespace LoadRunner
             Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch.Elapsed);
 
             DownTime();
+        }
+
+
+        private static void PartialRefresh2()
+        {
+            int total;
+            long vendorID = job.VendorID;
+            long numPages = jobNumPages[job.JobID];
+
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+
+            DateTime start = DateTime.Now;
+            DateTime? lastUpdated = (DateTime?)Thread.GetData(lastUpdatedSlot);
+
+            if (lastUpdated != null)
+                start = lastUpdated.Value;
+            else
+                start = GetDateTimeToHour(DateTime.Now);
+
+            Thread.SetData(lastUpdatedSlot, DateTime.Now);
+
+            string where = GetPartialRefreshWhere(vendorID, job.JobID, start, DateTime.Now.AddYears(1));
+            string sortField = "Pipe_ID";
+            string sortDir = "ASC";
+            string page = "0";
+            string pageSize = "1000000";
+
+            Console.WriteLine(where);
+
+            Console.WriteLine("running partial refresh for Job {0}", job.Name);
+            service.AcceptCachedData = false;
+            Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, page, pageSize, out total);
+
+            watch.Stop();
+            requestTimes.Add(watch.Elapsed);
+
+            Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch.Elapsed);
+
+            DownTime();
+        }
+
+
+        private static void PartialRefreshRandom()
+        {
+            int total;
+            long vendorID = job.VendorID;
+            long numPages = jobNumPages[job.JobID];
+
+            //ask for 0 to 5 hours of data
+            int numHours = rand.Next(1, 6);
+            Console.WriteLine("going to ask for {0} hours of pipes", numHours);
+
+            for (int i = numHours; i > 0; i--)
+            {
+                Stopwatch watch = new Stopwatch();
+                watch.Start();
+
+                DateTime now = DateTime.Now;
+                DateTime start = GetDateTimeToHour(now.AddHours(-i));
+                DateTime end = start.AddHours(1);
+
+                //get first page of data for this hour
+                string where = GetPartialRefreshWhere(vendorID, job.JobID, start, end);
+                Console.WriteLine("partial refresh {0} - {1}", start, end);
+                service.AcceptCachedData = true;
+                Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, "Pipe_ID", "ASC", "0", "1000", out total);
+
+                Console.WriteLine("finished partial refresh {0} - {1}, returned {2} pipes: {3}", start, end, pipes.Length, watch.Elapsed);
+
+                watch.Stop();
+                requestTimes.Add(watch.Elapsed);
+            }
+
+            //get non-cached data for this our up until right now
+            DateTime now2 = DateTime.Now;
+            DateTime start2 = GetDateTimeToHour(now2);
+            string where2 = GetPartialRefreshWhere(vendorID, job.JobID, start2, now2);
+            service.AcceptCachedData = false;
+            Pipe[] pipes2 = service.SelectPipesWithoutImageDataWithWelds(where2, "Pipe_ID", "ASC", "0", "1000", out total);
+
+            DownTime();
+        }
+
+
+        private static string GetPartialRefreshWhere(long vendorID, long jobID, DateTime start, DateTime end)
+        {
+            return string.Format("where Last_Updated BETWEEN convert(dateTime,'{0}',120) and convert(dateTime,'{1}',120) and " +
+                "Vendor_ID = {2} and Job_ID = {3}", start.ToString("yyyy-MM-dd HH:mm:ss"), end.ToString("yyyy-MM-dd HH:mm:ss"), vendorID, jobID);
+        }
+
+
+        private static DateTime GetDateTimeToHour(DateTime dt)
+        {
+            return new DateTime(dt.Year, dt.Month, dt.Day, dt.Hour, 0, 0);
         }
 
 

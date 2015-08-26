@@ -85,7 +85,7 @@ namespace Seed.localhost
                     "{10}|" +    //Calibration_Ref_Num_2
                     "|",         //Visual_Inspector_ID
                     WeldPartID, WeldID, Position, MachineID, MachineBugID1, CalibrationRefNum1,
-                    DateTime.Now.ToString("yyyy/MM/dd MM:hh:ss"), DateTime.Now.ToString("yyyy/MM/dd MM:hh:ss"),
+                    DateTime.Now.Formatted(), DateTime.Now.Formatted(),
                     Position2, MachineBugID2, CalibrationRefNum2);
             }
         }

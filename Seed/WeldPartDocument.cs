@@ -28,14 +28,14 @@ namespace Seed.localhost
                     "{0}|" +      //[Weld_Part_Document_ID]
                     "{1}|" +      //[Weld_Part_ID]
                     "{2}|" +      //[Document_Ref_Number]
-                    "00|" +       //[Document_Image]
-                    "{3}|" +      //[Created_Date]
-                    "{4}|" +      //[Last_Updated]
+                    "{3}|" +      //[Document_Image]
+                    "{4}|" +      //[Created_Date]
+                    "{5}|" +      //[Last_Updated]
                     "|" +         //[Modified_By_User_ID]
                     "|" +         //[Billable_Txn_Details_ID]
-                    "image/png",  //[Content_Type]
-                    WeldPartDocumentID, WeldPartID, DocumentRefNumber, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
-                    DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+                    "{6}",  //[Content_Type]
+                    WeldPartDocumentID, WeldPartID, DocumentRefNumber, DocumentImage, DateTime.Now.Formatted(),
+                    DateTime.Now.Formatted(), ContentType);
             }
         }
     }

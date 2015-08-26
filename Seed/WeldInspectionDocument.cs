@@ -34,8 +34,8 @@ namespace Seed.localhost
                     "|" +         //[Modified_By_User_ID]
                     "|" +         //[Billable_Txn_Details_ID]
                     "image/png",  //[Content_Type]
-                    WeldInspectionDocumentID, WeldInspectionID, DocumentRefNumber, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
-                    DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+                    WeldInspectionDocumentID, WeldInspectionID, DocumentRefNumber, DateTime.Now.Formatted(),
+                    DateTime.Now.Formatted());
             }
         }
     }

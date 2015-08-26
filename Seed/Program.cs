@@ -41,7 +41,7 @@ namespace Seed
         private static Random rand = new Random();
         private const int NUM_WELD_PASSES = 3;
         private const int NUM_WELD_INSPECTIONS = 5;
-        private const int NUM_PIPES_PER_LOAD = 100;
+        private const int NUM_PIPES_PER_LOAD = 50;
 
         private const string PIPE_FILE = "pipes.txt";
         private const string PIPE_BARCODE_FILE = "barcodes.txt";
@@ -228,7 +228,7 @@ namespace Seed
                     {
                         long pipeID = pipeIDs[j % pipeIDs.Count];
                         //Pipe_Load_Map_ID,Load_ID,Pipe_ID,Deleted,Last_Updated,Pipe_Status,Modified_By_User_ID,Billable_Txn_Details_ID
-                        sw.WriteLine("|{0}|{1}|0|{2}|||", load.LoadID, pipeID, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"));
+                        sw.WriteLine("|{0}|{1}|0|{2}|||", load.LoadID, pipeID, DateTime.Now.Formatted());
                     }
                 }
             }
@@ -405,7 +405,19 @@ namespace Seed
                 }
             };
 
-            weldPart.WeldPartDocuments = new WeldPartDocument[] { GenerateWeldPartDoc(weldPart.WeldPartID) };
+            weldPart.WeldPartDocuments = new WeldPartDocument[1];
+
+            //half of the documents will be reference docs
+            if (rand.Next() % 2 == 0)
+            {
+                string refNum = "refnum_" + GetNextID();
+                weldPart.WeldPartDocuments[0] = GenerateWeldPartDoc(weldPartID, refNum);
+                GenerateReferenceDocument(refNum);
+            }
+            else
+            {
+                weldPart.WeldPartDocuments[0] = GenerateWeldPartDoc(weldPartID);
+            }
 
             return weldPart;
         }
@@ -419,9 +431,28 @@ namespace Seed
                 WeldPartID = weldPartID,
                 JobID = parsedArgs.JobID,
                 ContentType = "image/png",
-                DocumentImage = string.Empty,
-                DocumentRefNumber = "weldpartrefnum",
+                DocumentImage = "1234",
                 CreatedDate = DateTime.Now,
+                LastUpdated = DateTime.Now
+            };
+        }
+
+
+        private static WeldPartDocument GenerateWeldPartDoc(long weldPartID, string refNum)
+        {
+            WeldPartDocument doc = GenerateWeldPartDoc(weldPartID);
+            doc.DocumentRefNumber = refNum;
+            doc.ContentType = null;
+            return doc;
+        }
+
+
+        private static CalibrationImage GenerateCalibrationImage()
+        {
+            return new CalibrationImage()
+            {
+                CalibrationImageID = GetNextID(),
+                CreationDate = DateTime.Now,
                 LastUpdated = DateTime.Now
             };
         }
@@ -448,7 +479,20 @@ namespace Seed
                 Delayed = false
             };
 
-            inspection.WeldInspectionDocuments = new WeldInspectionDocument[] { GenerateWeldInspectionDoc(inspection.WeldInspectionID) };
+            inspection.WeldInspectionDocuments = new WeldInspectionDocument[1];
+
+            //half of the documents will be reference docs
+            if (rand.Next() % 2 == 0)
+            {
+                string refNum = "refnum_" + GetNextID();
+                inspection.WeldInspectionDocuments[0] = GenerateWeldInspectionDoc(inspectionID, refNum);
+                GenerateReferenceDocument(refNum);
+            }
+            else
+            {
+                inspection.WeldInspectionDocuments[0] = GenerateWeldInspectionDoc(inspectionID);
+            }
+
             return inspection;
         }
 
@@ -463,9 +507,17 @@ namespace Seed
                 ContentType = "image/png",
                 CreatedDate = DateTime.Now,
                 LastUpdated = DateTime.Now,
-                DocumentImage = string.Empty,
-                DocumentRefNumber = "weldinsprefnum"
+                DocumentImage = "1234"
             };
+        }
+
+
+        private static WeldInspectionDocument GenerateWeldInspectionDoc(long weldInspID, string refNum)
+        {
+            WeldInspectionDocument doc = GenerateWeldInspectionDoc(weldInspID);
+            doc.DocumentRefNumber = refNum;
+            doc.ContentType = null;
+            return doc;
         }
 
 
@@ -528,6 +580,19 @@ namespace Seed
                 Image = string.Empty,
                 ReferenceNumber = "loadimagerefnum",
                 LastUpdated = DateTime.Now
+            };
+        }
+
+
+        private static ReferenceDocument GenerateReferenceDocument(string refNum)
+        {
+            return new ReferenceDocument()
+            {
+                ReferenceDocumentID = GetNextID(),
+                DateCreated = DateTime.Now,
+                LastUpdated = DateTime.Now,
+                ReferenceNumber = refNum,
+                ContentType = "image/png"
             };
         }
 

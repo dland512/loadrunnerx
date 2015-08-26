@@ -130,7 +130,7 @@ namespace Seed.localhost
                     Number,
                     Status,
                     Type,
-                    DateTime.Now.ToString("yyyy/MM/dd"),
+                    DateTime.Now.Formatted(),
                     VendorID,
                     Shipper,
                     Receiver,

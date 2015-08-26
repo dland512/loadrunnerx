@@ -25,7 +25,7 @@ namespace Seed.localhost
             get
             {
                 //Joint_Image_Data_ID,Image,Pipe_ID,Thumbnail,Last_Updated,Modified_By_User_ID,Client_Image_ID,Reference_Number,Billable_Txn_Details_ID,Content_Type
-                return string.Format("|00|{0}|00|{1}||{2}|{3}||{4}", PipeID, LastUpdated.ToString("yyyy/MM/dd HH:mm:ss"), JointImageDataID, ReferenceNumber, ContentType);
+                return string.Format("|00|{0}|00|{1}||{2}|{3}||{4}", PipeID, LastUpdated.Formatted(), JointImageDataID, ReferenceNumber, ContentType);
             }
         }
     }

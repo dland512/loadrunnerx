@@ -70,8 +70,8 @@ namespace Seed.localhost
                     "{7}|" +     //Spread
                     "{8}|" +     //Rig
                     "{9}",       //Crew
-                    WeldInspectionID, WeldID, DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"), DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"),
-                    DateTime.Now.ToString("yyyy/MM/dd HH:mm:ss"), 0, 1, Spread, Rig, Crew);
+                    WeldInspectionID, WeldID, DateTime.Now.Formatted(), DateTime.Now.Formatted(),
+                    DateTime.Now.Formatted(), 0, 1, Spread, Rig, Crew);
             }
         }
     }

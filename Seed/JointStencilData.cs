@@ -24,7 +24,7 @@ namespace Seed.localhost
             get
             {
                 //Joint_Stencil_Data_ID,Pipe_ID,Image,Last_Updated,Modified_By_User_ID,Client_Stencil_ID,Reference_Number,Billable_Txn_Details_ID,Content_Type
-                return string.Format("|{0}|00|{1}||{2}|{3}||{4}", PipeID, LastUpdated.ToString("yyyy/MM/dd HH:mm:ss"), JointStencilDataID, ReferenceNumber, ContentType);
+                return string.Format("|{0}|00|{1}||{2}|{3}||{4}", PipeID, LastUpdated.Formatted(), JointStencilDataID, ReferenceNumber, ContentType);
             }
         }
     }

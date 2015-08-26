@@ -39,7 +39,7 @@ namespace Seed.localhost
                     ReferenceNumber,
                     LoadID,
                     Type == LoadImageType.Identification ? "i" : "s",
-                    LastUpdated.ToString("yyyy/MM/dd HH:mm:ss"));
+                    LastUpdated.Formatted());
             }
         }
     }

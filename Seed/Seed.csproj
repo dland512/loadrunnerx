@@ -46,6 +46,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CalibrationImage.cs" />
+    <Compile Include="Extensions.cs" />
+    <Compile Include="ReferenceDocument.cs" />
     <Compile Include="WeldPartType.cs" />
     <Compile Include="JointImageData.cs" />
     <Compile Include="JointStencilData.cs" />

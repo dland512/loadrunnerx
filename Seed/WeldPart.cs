@@ -79,14 +79,14 @@ namespace Seed.localhost
                     "|" +        //Welder_2_ID
                     "{8}|" +     //Position_2
                     "|" +        //Inspection_Passed
-                    "{9}" +      //Machine_Bug_ID_2
-                    "|" +        //Calibration_Image_1_ID
-                    "|" +        //Calibration_Image_2_ID
-                    "{10}|" +    //Calibration_Ref_Num_2
-                    "|",         //Visual_Inspector_ID
-                    WeldPartID, WeldID, Position, MachineID, MachineBugID1, CalibrationRefNum1,
-                    DateTime.Now.Formatted(), DateTime.Now.Formatted(),
-                    Position2, MachineBugID2, CalibrationRefNum2);
+                    "{9}|" +     //Machine_Bug_ID_2
+                    "{10}|" +    //Calibration_Image_1_ID
+                    "{11}|" +    //Calibration_Image_2_ID
+                    "{12}|" +    //Calibration_Ref_Num_2
+                    "{13}",      //Visual_Inspector_ID
+                    WeldPartID, WeldID, Position, MachineID, MachineBugID1, CalibrationRefNum1, DateTime.Now.Formatted(),
+                    DateTime.Now.Formatted(), Position2, MachineBugID2, CalibrationImage1ID, CalibrationImage2ID, CalibrationRefNum2,
+                    string.Empty);
             }
         }
     }

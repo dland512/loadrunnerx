@@ -33,7 +33,7 @@ namespace Seed.localhost
                     "{5}|" +      //[Last_Updated]
                     "|" +         //[Modified_By_User_ID]
                     "|" +         //[Billable_Txn_Details_ID]
-                    "{6}",  //[Content_Type]
+                    "{6}",        //[Content_Type]
                     WeldPartDocumentID, WeldPartID, DocumentRefNumber, DocumentImage, DateTime.Now.Formatted(),
                     DateTime.Now.Formatted(), ContentType);
             }

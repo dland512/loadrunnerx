@@ -56,6 +56,10 @@ namespace Seed
         private const string LOAD_FILE = "loads.txt";
         private const string LOAD_DOC_FILE = "loaddocs.txt";
         private const string PLM_FILE = "plm.txt";
+        private const string REF_DOC_FILE = "refdocs.txt";
+        private const string CAL_IMAGE_FILE = "calimages.txt";
+
+        private static List<CalibrationImage> calibrationImages = new List<CalibrationImage>();
 
         static void Main(string[] args)
         {
@@ -68,16 +72,15 @@ namespace Seed
                 throw new Exception(string.Format("Invalid command line args: {0}", help.ToString()));
             }
 
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
-
-            List<long> pipeIDs = CreatePipes();
-            CreateWelds(pipeIDs);
-            CreateLoads(pipeIDs);
+            List<Pipe> pipes = CreatePipes();
+            List<long> pipeIDs = pipes.Select(p => p.PipeID).ToList();
+            CreateCalibrationImages();
+            List<Weld> welds = CreateWelds(pipeIDs);
+            List<Load> loads = CreateLoads(pipeIDs);
+            List<ReferenceDocument> refDocs = CreateReferenceDocuments(pipes, welds, loads);
+            OutputInsertStatements(pipes, welds, loads, refDocs);
             OutputSqlScript();
 
-            watch.Stop();
-            Console.WriteLine(watch.Elapsed);
             Console.WriteLine("done, press a key");
             Console.ReadKey();
         }
@@ -92,50 +95,31 @@ namespace Seed
         }
 
 
-        private static List<long> CreatePipes()
+        private static List<Pipe> CreatePipes()
         {
             List<Pipe> pipes = new List<Pipe>();
 
-            using (StreamWriter sw = File.CreateText(PIPE_FILE))
+            for (int i = 0; i < parsedArgs.NumPipes; i++)
             {
-                for (int i = 0; i < parsedArgs.NumPipes; i++)
-                {
-                    Pipe pipe = GeneratePipe();
-                    sw.WriteLine(pipe.BulkInsertLine);
-                    pipes.Add(pipe);
-                }
+                Pipe pipe = GeneratePipe();
+                pipes.Add(pipe);
             }
 
-            using (StreamWriter sw = File.CreateText(PIPE_BARCODE_FILE))
-            {
-                foreach(Pipe pipe in pipes)
-                    foreach (string barcode in pipe.AdditionalBarcodes)
-                        sw.WriteLine(string.Format("{0}|{1}||{2}|{3}", pipe.PipeID, barcode, "", ""));
-            }
-
-            using (StreamWriter sw = File.CreateText(PIPE_STENCIL_FILE))
-            {
-                foreach (Pipe pipe in pipes)
-                    foreach (JointStencilData stencil in pipe.StencilData)
-                        sw.WriteLine(stencil.BulkInsertLine);
-            }
-
-            using (StreamWriter sw = File.CreateText(PIPE_IMAGE_FILE))
-            {
-                foreach (Pipe pipe in pipes)
-                    foreach (JointImageData image in pipe.ImageData)
-                        sw.WriteLine(image.BulkInsertLine);
-            }
-
-            return pipes.Select(p => p.PipeID).ToList();
+            return pipes;
         }
 
 
-        private static void CreateWelds(List<long> pipeIDs)
+        private static void CreateCalibrationImages()
+        {
+            for (int i = 0; i < 10; i++)
+                calibrationImages.Add(GenerateCalibrationImage());
+        }
+
+
+        private static List<Weld> CreateWelds(List<long> pipeIDs)
         {
             List<Weld> welds = new List<Weld>();
-            Random rand = new Random();
-                
+
             using (StreamWriter sw = File.CreateText(WELD_FILE))
             {
                 int p = 0;
@@ -146,107 +130,95 @@ namespace Seed
                     p = (p + 1) % pipeIDs.Count;
                     long pipe2ID = pipeIDs[p];
                     Weld weld = GenerateWeld(pipe1ID, pipe2ID);
-
-                    sw.WriteLine(weld.BulkInsertLine);
                     welds.Add(weld);
                 }
             }
 
-            List<WeldPart> parts = new List<WeldPart>();
-
-            using (StreamWriter sw = File.CreateText(WELD_PASS_FILE))
+            foreach (Weld weld in welds)
             {
-                foreach(Weld weld in welds)
+                List<WeldPart> parts = new List<WeldPart>();
+
+                for (int j = 0; j < NUM_WELD_PASSES; j++)
                 {
-                    for (int j = 0; j < NUM_WELD_PASSES; j++)
-                    {
-                        WeldPart part = GenerateWeldPart(weld.WeldID);
-                        sw.WriteLine(part.BulkInsertLine);
-                        parts.Add(part);
-                    }
+                    WeldPart part = GenerateWeldPart(weld.WeldID);
+                    parts.Add(part);
                 }
+
+                weld.WeldParts = parts.ToArray();
             }
 
-            using (StreamWriter sw = File.CreateText(WELD_PASS_TYPE_FILE))
+            foreach (Weld weld in welds)
             {
-                foreach (WeldPart part in parts)
-                    foreach (WeldPartType type in part.Types)
-                        sw.WriteLine(type.BulkInsertLine);
-            }
+                List<WeldInspection> inspections = new List<WeldInspection>();
 
-            using (StreamWriter sw = File.CreateText(WELD_PASS_DOC_FILE))
-            {
-                foreach (WeldPart part in parts)
-                    foreach (WeldPartDocument doc in part.WeldPartDocuments)
-                        sw.WriteLine(doc.BulkInsertLine);
-            }
-
-            List<WeldInspection> inspections = new List<WeldInspection>();
-
-            using (StreamWriter sw = File.CreateText(WELD_INSP_FILE))
-            {
-                foreach (Weld weld in welds)
+                for (int j = 0; j < NUM_WELD_INSPECTIONS; j++)
                 {
-                    for (int j = 0; j < NUM_WELD_INSPECTIONS; j++)
-                    {
-                        WeldInspection insp = GenerateWeldInspection(weld.WeldID);
-                        sw.WriteLine(insp.BulkInsertLine);
-                        inspections.Add(insp);
-                    }
+                    WeldInspection insp = GenerateWeldInspection(weld.WeldID);
+                    inspections.Add(insp);
                 }
+
+                weld.WeldInspections = inspections.ToArray();
             }
 
-            using (StreamWriter sw = File.CreateText(WELD_INSP_DOC_FILE))
-            {
-                foreach (WeldInspection insp in inspections)
-                    foreach (WeldInspectionDocument doc in insp.WeldInspectionDocuments)
-                        sw.WriteLine(doc.BulkInsertLine);
-            }
+            return welds;
         }
 
 
-        private static void CreateLoads(List<long> pipeIDs)
+        private static List<Load> CreateLoads(List<long> pipeIDs)
         {
-            Random rand = new Random();
             List<Load> loads = new List<Load>();
 
-            using (StreamWriter sw = File.CreateText(LOAD_FILE))
+            for (int i = 0; i < parsedArgs.NumLoads; i++)
             {
-                for (int i = 0; i < parsedArgs.NumLoads; i++)
-                {
-                    Load load = GenerateLoad();
-                    sw.WriteLine(load.BulkInsertLine);
-                    loads.Add(load);
-                }
+                Load load = GenerateLoad();
+                loads.Add(load);
             }
 
-            using (StreamWriter sw = File.CreateText(PLM_FILE))
+            return loads;
+        }
+
+
+        private static List<ReferenceDocument> CreateReferenceDocuments(List<Pipe> pipes, List<Weld> welds, List<Load> loads)
+        {
+            List<ReferenceDocument> refDocs = new List<ReferenceDocument>();
+
+            foreach (Weld weld in welds)
             {
-                foreach(Load load in loads)
+                foreach(WeldPart part in weld.WeldParts)
                 {
-                    for (int j = 0; j < NUM_PIPES_PER_LOAD; j++)
+                    foreach(WeldPartDocument doc in part.WeldPartDocuments)
+                        if (!string.IsNullOrEmpty(doc.DocumentRefNumber) && rand.Next() % 2 == 0)
+                            refDocs.Add(GenerateReferenceDocument(doc.DocumentRefNumber));
+
+                    if (!string.IsNullOrEmpty(part.CalibrationRefNum1) && rand.Next() % 2 == 0)
                     {
-                        long pipeID = pipeIDs[j % pipeIDs.Count];
-                        //Pipe_Load_Map_ID,Load_ID,Pipe_ID,Deleted,Last_Updated,Pipe_Status,Modified_By_User_ID,Billable_Txn_Details_ID
-                        sw.WriteLine("|{0}|{1}|0|{2}|||", load.LoadID, pipeID, DateTime.Now.Formatted());
+                        Console.WriteLine("Cal image ref num 1 {0} for part {1}", part.CalibrationRefNum1, part.WeldPartID);
+                        refDocs.Add(GenerateReferenceDocument(part.CalibrationRefNum1));
+                    }
+
+                    if (!string.IsNullOrEmpty(part.CalibrationRefNum2) && rand.Next() % 2 == 0)
+                    {
+                        Console.WriteLine("Cal image ref num 2 {0} for part {1}", part.CalibrationRefNum2, part.WeldPartID);
+                        refDocs.Add(GenerateReferenceDocument(part.CalibrationRefNum2));
+                    }
+                }
+
+                foreach (WeldInspection insp in weld.WeldInspections)
+                {
+                    foreach (WeldInspectionDocument doc in insp.WeldInspectionDocuments)
+                    {
+                        if (!string.IsNullOrEmpty(doc.DocumentRefNumber) && rand.Next() % 2 == 0)
+                            refDocs.Add(GenerateReferenceDocument(doc.DocumentRefNumber));
                     }
                 }
             }
 
-            using (StreamWriter sw = File.CreateText(LOAD_DOC_FILE))
-            {
-                foreach (Load load in loads)
-                {
-                    foreach (LoadImage image in load.Images)
-                        sw.WriteLine(image.BulkInsertLine);
-                }
-            }
+            return refDocs;
         }
 
 
         private static Int64 GetRandomLong()
         {
-            Random rand = new Random();
             byte[] buffer = new byte[sizeof(Int64)];
             rand.NextBytes(buffer);
             return Math.Abs(BitConverter.ToInt64(buffer, 0));
@@ -255,7 +227,6 @@ namespace Seed
 
         private static Pipe GeneratePipe()
         {
-            Random rand = new Random();
             long pipeID = GetNextID();
 
             Pipe pipe = new Pipe()
@@ -347,7 +318,6 @@ namespace Seed
 
         private static Weld GenerateWeld(long pipe1ID, long pipe2ID)
         {
-            Random rand = new Random();
             long weldID = GetNextID();
 
             Weld weld = new Weld()
@@ -381,7 +351,6 @@ namespace Seed
 
         private static WeldPart GenerateWeldPart(long weldID)
         {
-            Random rand = new Random();
             long weldPartID = GetNextID();
 
             WeldPart weldPart = new WeldPart()
@@ -407,12 +376,29 @@ namespace Seed
 
             weldPart.WeldPartDocuments = new WeldPartDocument[1];
 
+            //calibration image will either be a hard image or a reference number
+            if (rand.Next() % 2 == 0)
+                weldPart.CalibrationImage1ID = calibrationImages[rand.Next(0, calibrationImages.Count)].CalibrationImageID;
+            else
+            {
+                weldPart.CalibrationRefNum1 = "refnum_" + GetNextID();
+                Console.WriteLine("Cal 1 ref number {0} for weld part {1}", weldPart.CalibrationRefNum1, weldPart.WeldPartID);
+            }
+
+            //calibration image will either be a hard image or a reference number
+            if (rand.Next() % 2 == 0)
+                weldPart.CalibrationImage2ID = calibrationImages[rand.Next(0, calibrationImages.Count)].CalibrationImageID;
+            else
+            {
+                weldPart.CalibrationRefNum2 = "refnum_" + GetNextID();
+                Console.WriteLine("Cal 1 ref number {0} for weld part {1}", weldPart.CalibrationRefNum2, weldPart.WeldPartID);
+            }
+
             //half of the documents will be reference docs
             if (rand.Next() % 2 == 0)
             {
                 string refNum = "refnum_" + GetNextID();
                 weldPart.WeldPartDocuments[0] = GenerateWeldPartDoc(weldPartID, refNum);
-                GenerateReferenceDocument(refNum);
             }
             else
             {
@@ -442,6 +428,7 @@ namespace Seed
         {
             WeldPartDocument doc = GenerateWeldPartDoc(weldPartID);
             doc.DocumentRefNumber = refNum;
+            doc.DocumentImage = string.Empty;
             doc.ContentType = null;
             return doc;
         }
@@ -453,7 +440,8 @@ namespace Seed
             {
                 CalibrationImageID = GetNextID(),
                 CreationDate = DateTime.Now,
-                LastUpdated = DateTime.Now
+                LastUpdated = DateTime.Now,
+                Image = "1234"
             };
         }
 
@@ -486,7 +474,6 @@ namespace Seed
             {
                 string refNum = "refnum_" + GetNextID();
                 inspection.WeldInspectionDocuments[0] = GenerateWeldInspectionDoc(inspectionID, refNum);
-                GenerateReferenceDocument(refNum);
             }
             else
             {
@@ -504,10 +491,10 @@ namespace Seed
                 WeldInspectionDocumentID = GetNextID(),
                 WeldInspectionID = weldInspID,
                 JobID = parsedArgs.JobID,
+                DocumentImage = "1234",
                 ContentType = "image/png",
                 CreatedDate = DateTime.Now,
-                LastUpdated = DateTime.Now,
-                DocumentImage = "1234"
+                LastUpdated = DateTime.Now
             };
         }
 
@@ -516,6 +503,7 @@ namespace Seed
         {
             WeldInspectionDocument doc = GenerateWeldInspectionDoc(weldInspID);
             doc.DocumentRefNumber = refNum;
+            doc.DocumentImage = string.Empty;
             doc.ContentType = null;
             return doc;
         }
@@ -589,9 +577,11 @@ namespace Seed
             return new ReferenceDocument()
             {
                 ReferenceDocumentID = GetNextID(),
+                JobID = parsedArgs.JobID,
                 DateCreated = DateTime.Now,
                 LastUpdated = DateTime.Now,
                 ReferenceNumber = refNum,
+                Document = "1234",
                 ContentType = "image/png"
             };
         }
@@ -603,6 +593,143 @@ namespace Seed
             service.ServiceHeaderValue = new ServiceHeader() { Username = "test", Password = "PT=Awesome", ApiVersion = "release7" };
             service.Timeout = 100000000;
             return service;
+        }
+
+
+        private static void OutputInsertStatements(List<Pipe> pipes, List<Weld> welds, List<Load> loads, List<ReferenceDocument> refDocs)
+        {
+            /*
+             * Output pipe statements
+             */
+
+            using (StreamWriter sw = File.CreateText(PIPE_FILE))
+            {
+                foreach (Pipe pipe in pipes)
+                    sw.WriteLine(pipe.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(PIPE_BARCODE_FILE))
+            {
+                foreach (Pipe pipe in pipes)
+                    foreach (string barcode in pipe.AdditionalBarcodes)
+                        sw.WriteLine(string.Format("{0}|{1}||{2}|{3}", pipe.PipeID, barcode, "", ""));
+            }
+
+            using (StreamWriter sw = File.CreateText(PIPE_STENCIL_FILE))
+            {
+                foreach (Pipe pipe in pipes)
+                    foreach (JointStencilData stencil in pipe.StencilData)
+                        sw.WriteLine(stencil.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(PIPE_IMAGE_FILE))
+            {
+                foreach (Pipe pipe in pipes)
+                    foreach (JointImageData image in pipe.ImageData)
+                        sw.WriteLine(image.BulkInsertLine);
+            }
+
+
+            /*
+             * Output weld statements
+             */
+
+            using (StreamWriter sw = File.CreateText(WELD_FILE))
+            {
+                foreach (Weld weld in welds)
+                    sw.WriteLine(weld.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_PASS_FILE))
+            {
+                foreach (Weld weld in welds)
+                    foreach(WeldPart part in weld.WeldParts)
+                        sw.WriteLine(part.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_PASS_TYPE_FILE))
+            {
+                foreach (Weld weld in welds)
+                    foreach (WeldPart part in weld.WeldParts)
+                        foreach (WeldPartType type in part.Types)
+                            sw.WriteLine(type.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_PASS_DOC_FILE))
+            {
+                foreach (Weld weld in welds)
+                    foreach (WeldPart part in weld.WeldParts)
+                        foreach (WeldPartDocument doc in part.WeldPartDocuments)
+                            sw.WriteLine(doc.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_INSP_FILE))
+            {
+                foreach (Weld weld in welds)
+                    foreach (WeldInspection insp in weld.WeldInspections)
+                        sw.WriteLine(insp.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(WELD_INSP_DOC_FILE))
+            {
+                foreach (Weld weld in welds)
+                    foreach (WeldInspection insp in weld.WeldInspections)
+                        foreach (WeldInspectionDocument doc in insp.WeldInspectionDocuments)
+                            sw.WriteLine(doc.BulkInsertLine);
+            }
+
+
+            /*
+             * Output load statements
+             */
+
+            using (StreamWriter sw = File.CreateText(LOAD_FILE))
+            {
+                foreach (Load load in loads)
+                    sw.WriteLine(load.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(LOAD_DOC_FILE))
+            {
+                foreach (Load load in loads)
+                    foreach (LoadImage image in load.Images)
+                        sw.WriteLine(image.BulkInsertLine);
+            }
+
+            using (StreamWriter sw = File.CreateText(PLM_FILE))
+            {
+                foreach (Load load in loads)
+                {
+                    for (int j = 0; j < NUM_PIPES_PER_LOAD; j++)
+                    {
+                        //select a random pipe to add to the load
+                        long pipeID = pipes[j % pipes.Count].PipeID;
+
+                        /* Pipe_Load_Map_ID,Load_ID,Pipe_ID,Deleted,Last_Updated,Pipe_Status,Modified_By_User_ID,Billable_Txn_Details_ID */
+                        sw.WriteLine("|{0}|{1}|0|{2}|||", load.LoadID, pipeID, DateTime.Now.Formatted());
+                    }
+                }
+            }
+
+
+            /*
+             * Output reference documents
+             */
+            using (StreamWriter sw = File.CreateText(REF_DOC_FILE))
+            {
+                foreach (ReferenceDocument refDoc in refDocs)
+                    sw.WriteLine(refDoc.BulkInsertLine);
+            }
+
+
+            /*
+             * Output calibration images
+             */
+            using (StreamWriter sw = File.CreateText(CAL_IMAGE_FILE))
+            {
+                foreach (CalibrationImage calImage in calibrationImages)
+                    sw.WriteLine(calImage.BulkInsertLine);
+            }
         }
 
 
@@ -623,6 +750,8 @@ namespace Seed
                 data.Add(new Tuple<string, string>("Loads", LOAD_FILE));
                 data.Add(new Tuple<string, string>("Load_Images", LOAD_DOC_FILE));
                 data.Add(new Tuple<string, string>("Pipe_Load_Map", PLM_FILE));
+                data.Add(new Tuple<string, string>("Reference_Documents", REF_DOC_FILE));
+                data.Add(new Tuple<string, string>("Calibration_Images", CAL_IMAGE_FILE));
 
                 string nl = System.Environment.NewLine;
                 FileInfo file = new FileInfo(System.Reflection.Assembly.GetExecutingAssembly().Location);

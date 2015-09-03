@@ -13,9 +13,12 @@ namespace Seed.localhost
             get
             {
                 return string.Format(
-                    "{0}|" +      //[Weld_Part_ID]
-                    "{1}",        //[Type]
-                    WeldPartID, Type);
+                    "{0}|" +    //[Weld_Part_Type_ID]
+                    "{1}|" +    //[Weld_Part_ID]
+                    "{2}|" +    //[Type]
+                    "{3}|" +    //[Modified_By_User_ID]
+                    "{4}",      //[Billable_Txn_Details_ID]
+                    string.Empty, WeldPartID, Type, string.Empty, string.Empty);
             }
         }
     }

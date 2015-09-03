@@ -192,13 +192,11 @@ namespace Seed
 
                     if (!string.IsNullOrEmpty(part.CalibrationRefNum1) && rand.Next() % 2 == 0)
                     {
-                        Console.WriteLine("Cal image ref num 1 {0} for part {1}", part.CalibrationRefNum1, part.WeldPartID);
                         refDocs.Add(GenerateReferenceDocument(part.CalibrationRefNum1));
                     }
 
                     if (!string.IsNullOrEmpty(part.CalibrationRefNum2) && rand.Next() % 2 == 0)
                     {
-                        Console.WriteLine("Cal image ref num 2 {0} for part {1}", part.CalibrationRefNum2, part.WeldPartID);
                         refDocs.Add(GenerateReferenceDocument(part.CalibrationRefNum2));
                     }
                 }
@@ -382,7 +380,6 @@ namespace Seed
             else
             {
                 weldPart.CalibrationRefNum1 = "refnum_" + GetNextID();
-                Console.WriteLine("Cal 1 ref number {0} for weld part {1}", weldPart.CalibrationRefNum1, weldPart.WeldPartID);
             }
 
             //calibration image will either be a hard image or a reference number
@@ -391,7 +388,6 @@ namespace Seed
             else
             {
                 weldPart.CalibrationRefNum2 = "refnum_" + GetNextID();
-                Console.WriteLine("Cal 1 ref number {0} for weld part {1}", weldPart.CalibrationRefNum2, weldPart.WeldPartID);
             }
 
             //half of the documents will be reference docs
@@ -744,6 +740,7 @@ namespace Seed
                 data.Add(new Tuple<string, string>("Pipe_Barcodes", PIPE_BARCODE_FILE));
                 data.Add(new Tuple<string, string>("Welds", WELD_FILE));
                 data.Add(new Tuple<string, string>("Weld_Parts", WELD_PASS_FILE));
+                data.Add(new Tuple<string, string>("Weld_Part_Types", WELD_PASS_TYPE_FILE));
                 data.Add(new Tuple<string, string>("Weld_Part_Documents", WELD_PASS_DOC_FILE));
                 data.Add(new Tuple<string, string>("Weld_Inspections", WELD_INSP_FILE));
                 data.Add(new Tuple<string, string>("Weld_Inspection_Documents", WELD_INSP_DOC_FILE));

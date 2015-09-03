@@ -278,8 +278,9 @@ namespace LoadRunner
 
             for (int i = 0; i < numPages; i++)
             {
-                Stopwatch watch = new Stopwatch();
-                watch.Start();
+                Stopwatch watch1 = new Stopwatch();
+                Stopwatch watch2 = new Stopwatch();
+                
 
                 string where = string.Format("WHERE Vendor_ID = {0} AND Job_ID = {1}", vendorID, job.JobID);
                 string sortField = "Pipe_ID";
@@ -288,12 +289,21 @@ namespace LoadRunner
 
                 Console.WriteLine("Full refresh: getting page {0} for Job {1}", i, job.JobID);
                 service.AcceptCachedData = false;
+
+                watch1.Start();
                 Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, i.ToString(), pageSize, out total);
+                watch1.Stop();
+                Console.WriteLine("Retrieved {0} pipes for page {1} under job {2}: {3}", pipes.Length, i, job.JobID, watch1.Elapsed);
 
-                watch.Stop();
-                requestTimes.Add(watch.Elapsed);
+                watch2.Start();
+                Weld[] welds = service.SelectWeldsWithChildren(job.JobID, null, i, int.Parse(pageSize));
+                watch2.Stop();
+                Console.WriteLine("Retrieved {0} welds for page {1} under job {2}: {3}", welds.Length, i, job.JobID, watch2.Elapsed);
 
-                Console.WriteLine("Retrieved {0} pipes for page {1} under job {2}: {3}", pipes.Length, i, job.JobID, watch.Elapsed);
+                TimeSpan totalTime = watch1.Elapsed.Add(watch2.Elapsed);
+                requestTimes.Add(totalTime);
+
+                Console.WriteLine("Total time for full refresh: {0}", totalTime);
 
                 DownTime();
             }
@@ -310,8 +320,8 @@ namespace LoadRunner
             long vendorID = job.VendorID;
             long numPages = jobNumPages[job.JobID];
 
-            Stopwatch watch = new Stopwatch();
-            watch.Start();
+            Stopwatch watch1 = new Stopwatch();
+            Stopwatch watch2 = new Stopwatch();
 
             string where = string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}",
                 parsedArgs.PartialRefreshDate, vendorID, job.JobID);
@@ -322,12 +332,22 @@ namespace LoadRunner
 
             Console.WriteLine("running partial refresh for Job {0}", job.Name);
             service.AcceptCachedData = false;
+
+            watch1.Start();
             Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, page, pageSize, out total);
+            watch1.Stop();
+            Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch1.Elapsed);
 
-            watch.Stop();
-            requestTimes.Add(watch.Elapsed);
+            watch2.Start();
+            DateTime updatedSince = DateTime.Parse(parsedArgs.PartialRefreshDate);
+            Weld[] welds = service.SelectWeldsWithChildren(job.JobID, updatedSince, 0, 10000);
+            watch2.Stop();
+            Console.WriteLine("partial refresh retrieved {0} welds for job {1}: {2}", welds.Length, job.JobID, watch2.Elapsed);
 
-            Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch.Elapsed);
+            TimeSpan totalTime = watch1.Elapsed.Add(watch2.Elapsed);
+            requestTimes.Add(totalTime);
+
+            Console.WriteLine("total partial refresh time: {0}", totalTime);
 
             DownTime();
         }

@@ -18,7 +18,7 @@ namespace LoadRunner
 {
     public class CommandLineArgs
     {
-        public enum Operation { Full, Partial, Partial2, PartialRandom, PipeUpdate };
+        public enum Operation { Full, Partial, Partial2, PartialRandom, PipeUpdate, WeldUpdate };
 
         [Option('u', "username", Required = true, HelpText = "Username for web service calls")]
         public string Username { get; set; }
@@ -63,6 +63,7 @@ namespace LoadRunner
         private static int downMax;
         private static Dictionary<long, List<Task>> userTasks = new Dictionary<long, List<Task>>();
         private static List<Pipe> pipesToUpdate = new List<Pipe>();
+        private static List<Weld> weldsToUpdate = new List<Weld>();
         static LocalDataStoreSlot lastUpdatedSlot = Thread.AllocateNamedDataSlot("LastUpdated");
         
 
@@ -128,7 +129,9 @@ namespace LoadRunner
 
             //add 1000 random pipes to be the ones for updating
             for (int i = 0; i < 1000; i++)
-                pipesToUpdate.Add(pipes[rand.Next(0, pipes.Length)]);
+                pipesToUpdate.Add(pipes[i]);
+
+            weldsToUpdate = service.SelectWelds(string.Format("WHERE P1.Job_ID = {0}", job.JobID), "W.Weld_ID", "ASC", "0", "1000", out total).ToList();
 
             Console.WriteLine();
             Console.WriteLine("starting tasks...");
@@ -169,6 +172,10 @@ namespace LoadRunner
 
                     case CommandLineArgs.Operation.PipeUpdate:
                         threads.Add(new Thread(SetupPipeUpdates));
+                        break;
+
+                    case CommandLineArgs.Operation.WeldUpdate:
+                        threads.Add(new Thread(SetupWeldUpdates));
                         break;
                 }
             }
@@ -268,6 +275,19 @@ namespace LoadRunner
         }
 
 
+        private static void SetupWeldUpdates()
+        {
+            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
+            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
+            System.Threading.Thread.Sleep(staggerTime);
+
+            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
+
+            for (int i = 0; i < parsedArgs.NumOps; i++)
+                WeldUpdate();
+        }
+
+
         private static void FullRefresh()
         {
             Console.WriteLine("Full refresh");
@@ -340,7 +360,7 @@ namespace LoadRunner
 
             watch2.Start();
             DateTime updatedSince = DateTime.Parse(parsedArgs.PartialRefreshDate);
-            Weld[] welds = service.SelectWeldsWithChildren(job.JobID, updatedSince, 0, 10000);
+            Weld[] welds = service.SelectWeldsWithChildren(job.JobID, updatedSince, 0, 1000);
             watch2.Stop();
             Console.WriteLine("partial refresh retrieved {0} welds for job {1}: {2}", welds.Length, job.JobID, watch2.Elapsed);
 
@@ -478,6 +498,26 @@ namespace LoadRunner
 
             Console.WriteLine(service.Url);
             service.UpdatePipe(pipe);
+
+            watch.Stop();
+            requestTimes.Add(watch.Elapsed);
+
+            DownTime();
+        }
+
+
+        private static void WeldUpdate()
+        {
+            Console.WriteLine("Weld update");
+            Weld weld = weldsToUpdate[rand.Next(0, weldsToUpdate.Count)];
+
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+
+            weld.Station = "playstation";
+            Console.WriteLine(service.Url);
+            weld.LastUpdated = DateTime.Now;
+            service.UpdateWeld(weld);
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);

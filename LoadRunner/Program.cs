@@ -18,7 +18,7 @@ namespace LoadRunner
 {
     public class CommandLineArgs
     {
-        public enum Operation { Full, Partial, Partial2, PartialRandom, PipeUpdate, WeldUpdate };
+        public enum Operation { Full, Partial, PipeUpdate, PipeUpdateRefresh, WeldUpdate, WeldUpdateRefresh };
 
         [Option('u', "username", Required = true, HelpText = "Username for web service calls")]
         public string Username { get; set; }
@@ -44,6 +44,9 @@ namespace LoadRunner
         [Option('d', "downtime", Required = true, HelpText = "Seconds between requests min:max")]
         public string DownTimeSec { get; set; }
 
+        [Option('a', "appprocesstime", Required = false, HelpText = "Time (in milliseconds) that it will take the app to process a single record of data pulled down")]
+        public int AppProcessingTime { get; set; }
+
         [Option('r', "refreshdate", Required = false, HelpText = "Partial refresh date/time (e.g. 2015-08-14 11:21:00)")]
         public string PartialRefreshDate { get; set; }
     }
@@ -65,6 +68,7 @@ namespace LoadRunner
         private static List<Pipe> pipesToUpdate = new List<Pipe>();
         private static List<Weld> weldsToUpdate = new List<Weld>();
         static LocalDataStoreSlot lastUpdatedSlot = Thread.AllocateNamedDataSlot("LastUpdated");
+        static Stopwatch overallWatch = new Stopwatch();
         
 
         static void Main(string[] args)
@@ -80,10 +84,14 @@ namespace LoadRunner
 
             Init();
 
+            overallWatch.Start();
+
             List<Thread> threads = GetThreads();
             Console.WriteLine("have {0} threads that are being started", threads.Count);
             threads.ForEach(t => t.Start());
             threads.ForEach(t => t.Join());
+
+            overallWatch.Stop();
 
             OutputResults();
 
@@ -155,27 +163,27 @@ namespace LoadRunner
                 switch (parsedArgs.Op)
                 {
                     case CommandLineArgs.Operation.Full:
-                        threads.Add(new Thread(SetupFullRefresh));
+                        threads.Add(new Thread(() => RunThreadOperations(FullRefresh)));
                         break;
 
                     case CommandLineArgs.Operation.Partial:
-                        threads.Add(new Thread(SetupPartialRefresh));
-                        break;
-
-                    case CommandLineArgs.Operation.Partial2:
-                        threads.Add(new Thread(SetupPartialRefresh2));
-                        break;
-
-                    case CommandLineArgs.Operation.PartialRandom:
-                        threads.Add(new Thread(SetupPartialRandom));
+                        threads.Add(new Thread(() => RunThreadOperations(PartialRefresh)));
                         break;
 
                     case CommandLineArgs.Operation.PipeUpdate:
-                        threads.Add(new Thread(SetupPipeUpdates));
+                        threads.Add(new Thread(() => RunThreadOperations(PipeUpdate)));
+                        break;
+
+                    case CommandLineArgs.Operation.PipeUpdateRefresh:
+                        threads.Add(new Thread(() => RunThreadOperations(PipeUpdateAndRefresh)));
                         break;
 
                     case CommandLineArgs.Operation.WeldUpdate:
-                        threads.Add(new Thread(SetupWeldUpdates));
+                        threads.Add(new Thread(() => RunThreadOperations(WeldUpdate)));
+                        break;
+
+                    case CommandLineArgs.Operation.WeldUpdateRefresh:
+                        threads.Add(new Thread(() => RunThreadOperations(WeldUpdateAndRefresh)));
                         break;
                 }
             }
@@ -195,96 +203,28 @@ namespace LoadRunner
         {
             MainService service = new MainService();
             service.Url = ConfigurationManager.AppSettings["ServiceUrl"];
-            service.ServiceHeaderValue = new ServiceHeader() { Username = parsedArgs.Username, Password = parsedArgs.Password, ApiVersion = "release7" };
+            service.ServiceHeaderValue = new ServiceHeader() { Username = parsedArgs.Username, Password = parsedArgs.Password, ApiVersion = "release8" };
             service.Timeout = 100000000;
             return service;
         }
 
 
-        private static void SetupFullRefresh()
+        private delegate void RunOperation();
+
+
+        private static void RunThreadOperations(RunOperation Operation)
         {
             int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-
+            Log(string.Format("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId));
             System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            for (int i = 0; i < parsedArgs.NumOps; i++)
-                FullRefresh();
-        }
-
-
-        private static void SetupPartialRefresh()
-        {
-            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            for (int i = 0; i < parsedArgs.NumOps; i++)
-                PartialRefresh();
-        }
-
-
-        private static void SetupPartialRefresh2()
-        {
-            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            for (int i = 0; i < parsedArgs.NumOps; i++)
-                PartialRefresh2();
-        }
-
-
-        private static void SetupPartialRandom()
-        {
-            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
+            Log(string.Format("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId));
 
             for (int i = 0; i < parsedArgs.NumOps; i++)
             {
-                PartialRefreshRandom();
-                Console.WriteLine();
-                Console.WriteLine(i);
-                Console.WriteLine();
+                Operation();
+                DownTime();
+                Console.WriteLine(System.Environment.NewLine);
             }
-        }
-
-
-        private static void SetupPipeUpdates()
-        {
-            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-            System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            for (int i = 0; i < parsedArgs.NumOps; i++)
-                PipeUpdate();
-        }
-
-
-        private static void SetupWeldUpdates()
-        {
-            int staggerTime = rand.Next(staggerMin * 1000, staggerMax * 1000);
-            Console.WriteLine("waiting {0} milliseconds to start user on thread {1}", staggerTime, System.Threading.Thread.CurrentThread.ManagedThreadId);
-            System.Threading.Thread.Sleep(staggerTime);
-
-            Console.WriteLine("finished waiting to start user on thread {0}", System.Threading.Thread.CurrentThread.ManagedThreadId);
-
-            for (int i = 0; i < parsedArgs.NumOps; i++)
-                WeldUpdate();
         }
 
 
@@ -301,7 +241,6 @@ namespace LoadRunner
                 Stopwatch watch1 = new Stopwatch();
                 Stopwatch watch2 = new Stopwatch();
                 
-
                 string where = string.Format("WHERE Vendor_ID = {0} AND Job_ID = {1}", vendorID, job.JobID);
                 string sortField = "Pipe_ID";
                 string sortDir = "ASC";
@@ -315,150 +254,100 @@ namespace LoadRunner
                 watch1.Stop();
                 Console.WriteLine("Retrieved {0} pipes for page {1} under job {2}: {3}", pipes.Length, i, job.JobID, watch1.Elapsed);
 
+                ProcessDataInApp(pipes.Length);
+
                 watch2.Start();
                 Weld[] welds = service.SelectWeldsWithChildren(job.JobID, null, i, int.Parse(pageSize));
                 watch2.Stop();
                 Console.WriteLine("Retrieved {0} welds for page {1} under job {2}: {3}", welds.Length, i, job.JobID, watch2.Elapsed);
 
+                ProcessDataInApp(welds.Length);
+
                 TimeSpan totalTime = watch1.Elapsed.Add(watch2.Elapsed);
                 requestTimes.Add(totalTime);
 
                 Console.WriteLine("Total time for full refresh: {0}", totalTime);
-
-                DownTime();
             }
         }
 
 
+
+        /// <summary>
+        /// First refresh is based on the PartialRefreshDate command line parameter, subsequent refreshes are based on when the
+        /// previous refresh was done.
+        /// </summary>
         private static void PartialRefresh()
         {
-            DateTime d;
-            if (string.IsNullOrEmpty(parsedArgs.PartialRefreshDate) || !DateTime.TryParse(parsedArgs.PartialRefreshDate, out d))
-                throw new ArgumentException("Invalid partial refresh date: " + parsedArgs.PartialRefreshDate);
+            DateTime since;
+            DateTime? lastUpdated = (DateTime?)Thread.GetData(lastUpdatedSlot);
 
-            int total;
-            long vendorID = job.VendorID;
-            long numPages = jobNumPages[job.JobID];
+            //get pipes and welds since the last request was made. If no requests have been made, use datetime passed in on commmand line
+            if (lastUpdated != null)
+                since = lastUpdated.Value;
+            else
+                since = DateTime.Parse(parsedArgs.PartialRefreshDate);
 
-            Stopwatch watch1 = new Stopwatch();
-            Stopwatch watch2 = new Stopwatch();
+            Thread.SetData(lastUpdatedSlot, DateTime.Now);
 
-            string where = string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}",
-                parsedArgs.PartialRefreshDate, vendorID, job.JobID);
-            string sortField = "Pipe_ID";
-            string sortDir = "ASC";
-            string page = "0";
-            string pageSize = "1000000";
+            Log(string.Format("Running partial refresh for everthing after {0} ({1} since the last refresh)", since, DateTime.Now.Subtract(since)));
 
-            Console.WriteLine("running partial refresh for Job {0}", job.Name);
-            service.AcceptCachedData = false;
-
-            watch1.Start();
-            Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, page, pageSize, out total);
-            watch1.Stop();
-            Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch1.Elapsed);
-
-            watch2.Start();
-            DateTime updatedSince = DateTime.Parse(parsedArgs.PartialRefreshDate);
-            Weld[] welds = service.SelectWeldsWithChildren(job.JobID, updatedSince, 0, 1000);
-            watch2.Stop();
-            Console.WriteLine("partial refresh retrieved {0} welds for job {1}: {2}", welds.Length, job.JobID, watch2.Elapsed);
-
-            TimeSpan totalTime = watch1.Elapsed.Add(watch2.Elapsed);
-            requestTimes.Add(totalTime);
-
-            Console.WriteLine("total partial refresh time: {0}", totalTime);
-
-            DownTime();
-        }
-
-
-        private static void PartialRefresh2()
-        {
-            int total;
-            long vendorID = job.VendorID;
-            long numPages = jobNumPages[job.JobID];
+            int pageSize = 1000;
+            int numReceived = 0;
+            int page = 0;
 
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            DateTime start = DateTime.Now;
-            DateTime? lastUpdated = (DateTime?)Thread.GetData(lastUpdatedSlot);
+            /*
+             * Get pipes using partial refresh
+             */
+            do
+            {
+                string where = GetPartialRefreshWhere(job.VendorID, job.JobID, since);
+                int total;
 
-            if (lastUpdated != null)
-                start = lastUpdated.Value;
-            else
-                start = GetDateTimeToHour(DateTime.Now);
+                Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, "Pipe_ID", "ASC", page.ToString(), pageSize.ToString(), out total);
 
-            Thread.SetData(lastUpdatedSlot, DateTime.Now);
+                numReceived = pipes.Length;
+                Log(string.Format("partial pipe refresh on page {0} returned {1} pipes", page, numReceived));
+                page++;
 
-            string where = GetPartialRefreshWhere(vendorID, job.JobID, start, DateTime.Now.AddYears(1));
-            string sortField = "Pipe_ID";
-            string sortDir = "ASC";
-            string page = "0";
-            string pageSize = "1000000";
+                //wait while the app processes the data
+                ProcessDataInApp(numReceived);
+            }
+            while (numReceived >= pageSize);
 
-            Console.WriteLine(where);
+            pageSize = 1000;
+            numReceived = 0;
+            page = 0;
 
-            Console.WriteLine("running partial refresh for Job {0}", job.Name);
-            service.AcceptCachedData = false;
-            Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, page, pageSize, out total);
+            /*
+             * Get welds using partial refresh
+             */
+            do
+            {
+                Weld[] welds = service.SelectWeldsWithChildren(job.JobID, since, page, pageSize);
+
+                numReceived = welds.Length;
+                Log(string.Format("partial weld refresh on page {0} returned {1} welds", page, numReceived));
+                page++;
+
+                //wait while the app processes the data
+                ProcessDataInApp(numReceived);
+            }
+            while (numReceived >= pageSize);
+
+            Log(string.Format("Partial refresh done: {0}", watch.Elapsed));
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
-
-            Console.WriteLine("partial refresh retrieved {0} pipes for job {1}: {2}", pipes.Length, job.JobID, watch.Elapsed);
-
-            DownTime();
         }
 
 
-        private static void PartialRefreshRandom()
+        private static string GetPartialRefreshWhere(long vendorID, long jobID, DateTime since)
         {
-            int total;
-            long vendorID = job.VendorID;
-            long numPages = jobNumPages[job.JobID];
-
-            //ask for 0 to 5 hours of data
-            int numHours = rand.Next(1, 6);
-            Console.WriteLine("going to ask for {0} hours of pipes", numHours);
-
-            for (int i = numHours; i > 0; i--)
-            {
-                Stopwatch watch = new Stopwatch();
-                watch.Start();
-
-                DateTime now = DateTime.Now;
-                DateTime start = GetDateTimeToHour(now.AddHours(-i));
-                DateTime end = start.AddHours(1);
-
-                //get first page of data for this hour
-                string where = GetPartialRefreshWhere(vendorID, job.JobID, start, end);
-                Console.WriteLine("partial refresh {0} - {1}", start, end);
-                service.AcceptCachedData = true;
-                Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, "Pipe_ID", "ASC", "0", "1000", out total);
-
-                Console.WriteLine("finished partial refresh {0} - {1}, returned {2} pipes: {3}", start, end, pipes.Length, watch.Elapsed);
-
-                watch.Stop();
-                requestTimes.Add(watch.Elapsed);
-            }
-
-            //get non-cached data for this our up until right now
-            DateTime now2 = DateTime.Now;
-            DateTime start2 = GetDateTimeToHour(now2);
-            string where2 = GetPartialRefreshWhere(vendorID, job.JobID, start2, now2);
-            service.AcceptCachedData = false;
-            Pipe[] pipes2 = service.SelectPipesWithoutImageDataWithWelds(where2, "Pipe_ID", "ASC", "0", "1000", out total);
-
-            DownTime();
-        }
-
-
-        private static string GetPartialRefreshWhere(long vendorID, long jobID, DateTime start, DateTime end)
-        {
-            return string.Format("where Last_Updated BETWEEN convert(dateTime,'{0}',120) and convert(dateTime,'{1}',120) and " +
-                "Vendor_ID = {2} and Job_ID = {3}", start.ToString("yyyy-MM-dd HH:mm:ss"), end.ToString("yyyy-MM-dd HH:mm:ss"), vendorID, jobID);
+            return string.Format("where Last_Updated >= convert(dateTime,'{0}',120) and Vendor_ID = {1} and Job_ID = {2}",
+                since.ToString("yyyy-MM-dd HH:mm:ss"), vendorID, jobID);
         }
 
 
@@ -475,13 +364,10 @@ namespace LoadRunner
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            Console.WriteLine(service.Url);
             service.InsertAndUpdatePipeWithMultipleBarcodes(GeneratePipe());
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
-
-            DownTime();
         }
 
 
@@ -496,33 +382,44 @@ namespace LoadRunner
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            Console.WriteLine(service.Url);
             service.UpdatePipe(pipe);
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
+        }
 
-            DownTime();
+
+        private static void PipeUpdateAndRefresh()
+        {
+            Console.WriteLine("Pipe update followed by a refresh");
+            PipeUpdate();
+            Thread.Sleep(2000);
+            PartialRefresh();
         }
 
 
         private static void WeldUpdate()
         {
-            Console.WriteLine("Weld update");
             Weld weld = weldsToUpdate[rand.Next(0, weldsToUpdate.Count)];
 
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
             weld.Station = "playstation";
-            Console.WriteLine(service.Url);
             weld.LastUpdated = DateTime.Now;
             service.UpdateWeld(weld);
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
+        }
 
-            DownTime();
+
+        private static void WeldUpdateAndRefresh()
+        {
+            Console.WriteLine("Weld update followed by a refresh");
+            WeldUpdate();
+            Thread.Sleep(2000);
+            PartialRefresh();
         }
 
 
@@ -533,13 +430,10 @@ namespace LoadRunner
             Stopwatch watch = new Stopwatch();
             watch.Start();
 
-            Console.WriteLine(service.Url);
             service.InsertWeld(GenerateWeld());
 
             watch.Stop();
             requestTimes.Add(watch.Elapsed);
-
-            DownTime();
         }
 
 
@@ -549,6 +443,14 @@ namespace LoadRunner
             int downTime = rand.Next(downMin * 1000, downMax * 1000);
             Console.WriteLine("going down for {0} milliseconds", downTime);
             System.Threading.Thread.Sleep(downTime);
+        }
+
+
+        private static void ProcessDataInApp(int numRecs)
+        {
+            int totalTime = parsedArgs.AppProcessingTime * numRecs;
+            Console.WriteLine("app will process {0} records for {1} milliseconds each, total time: {2} seconds", numRecs, parsedArgs.AppProcessingTime, totalTime/1000.0);
+            System.Threading.Thread.Sleep(totalTime);
         }
 
 
@@ -668,7 +570,8 @@ namespace LoadRunner
 
             avgTime /= requestTimes.Count;
 
-            Console.WriteLine("total time: {0}", fullTime.ToString("g"));
+            Console.WriteLine("total test time: {0}", overallWatch.Elapsed);
+            Console.WriteLine("total time waiting for data: {0}", fullTime.ToString("g"));
             Console.WriteLine("min request time: {0}", FormatTime(minTime));
             Console.WriteLine("max request time: {0}", FormatTime(maxTime));
             Console.WriteLine("average request time: {0}", FormatTime(avgTime));
@@ -771,6 +674,12 @@ namespace LoadRunner
                 "num requests: {7},   total time: {8},   min request: {9},   max request: {10},   avg request: {11}", job.Name, job.PipeCount,
                 parsedArgs.NumThreads, parsedArgs.Op, parsedArgs.NumOps, parsedArgs.StaggerUsers, parsedArgs.DownTimeSec, requestTimes.Count,
                 totalTime.ToString(@"hh\:mm\:ss\.ff"), FormatTime(minTime), FormatTime(maxTime), FormatTime(avgTime));
+        }
+
+
+        private static void Log(string msg)
+        {
+            Console.WriteLine("{0}: {1}", DateTime.Now, msg);
         }
     }
 }

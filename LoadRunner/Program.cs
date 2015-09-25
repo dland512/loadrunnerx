@@ -135,11 +135,18 @@ namespace LoadRunner
             downMin = int.Parse(downMinMax[0]);
             downMax = int.Parse(downMinMax[1]);
 
-            //add 1000 random pipes to be the ones for updating
-            for (int i = 0; i < 1000; i++)
-                pipesToUpdate.Add(pipes[i]);
+            if (parsedArgs.Op == CommandLineArgs.Operation.PipeUpdate || parsedArgs.Op == CommandLineArgs.Operation.PipeUpdateRefresh)
+            {
+                //get 5000 random pipes to be used for updates
+                pipesToUpdate = service.SelectPipes(string.Format("WHERE P.Vendor_ID = {0} AND P.Job_ID = {1}", job.VendorID, job.JobID),
+                    "P.Barcode", "ASC", "0", "5000", out total).ToList();
+            }
 
-            weldsToUpdate = service.SelectWelds(string.Format("WHERE P1.Job_ID = {0}", job.JobID), "W.Weld_ID", "ASC", "0", "1000", out total).ToList();
+            if (parsedArgs.Op == CommandLineArgs.Operation.WeldUpdate || parsedArgs.Op == CommandLineArgs.Operation.WeldUpdateRefresh)
+            {
+                //get 5000 random welds to be used for updates
+                weldsToUpdate = service.SelectWelds(string.Format("WHERE P1.Job_ID = {0}", job.JobID), "W.Weld_Barcode", "ASC", "0", "5000", out total).ToList();
+            }
 
             Console.WriteLine();
             Console.WriteLine("starting tasks...");

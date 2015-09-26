@@ -367,8 +367,8 @@ namespace Seed
                 VisualInspectionPassed = true,
                 Types = new WeldPartType[]
                 {
-                    new WeldPartType() { Type = "Branch", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() },
-                    new WeldPartType() { Type = "Butt", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() }
+                    new WeldPartType() { Type = "Root", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() },
+                    new WeldPartType() { Type = "Repair", WeldPartID = weldPartID, WeldPartTypeID = GetNextID() }
                 }
             };
 

@@ -97,7 +97,7 @@ namespace Seed.localhost
                     "{19}|",    //Repair_Wps_Number
                     WeldID, WeldNumber, Pipe1ID, Pipe2ID, Longitude, Latitude, LastUpdated.Formatted(), 0, CurrentLocation,
                     WeldBarcode, WeldCoating, CreationDate.Formatted(), WelderFirstName, WelderLastName, WpsNumber, Station,
-                    Status, 0, Type, RepairWpsNumber);
+                    Status, Repaired, Type, RepairWpsNumber);
             }
         }
     }

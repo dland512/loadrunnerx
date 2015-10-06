@@ -44,8 +44,8 @@ namespace LoadRunner
         [Option('d', "downtime", Required = true, HelpText = "Seconds between requests min:max")]
         public string DownTimeSec { get; set; }
 
-        [Option('a', "appprocesstime", Required = false, HelpText = "Time (in milliseconds) that it will take the app to process a single record of data pulled down")]
-        public int AppProcessingTime { get; set; }
+        [Option('a', "appprocesstime", Required = false, HelpText = "The min:max time (in milliseconds) that it will take the app to process a single record of data pulled down")]
+        public string AppProcessingTime { get; set; }
 
         [Option('r', "refreshdate", Required = false, HelpText = "Partial refresh date/time (e.g. 2015-08-14 11:21:00)")]
         public string PartialRefreshDate { get; set; }
@@ -64,6 +64,8 @@ namespace LoadRunner
         private static int staggerMax;
         private static int downMin;
         private static int downMax;
+        private static int appProcTimeMin;
+        private static int appProcTimeMax;
         private static Dictionary<long, List<Task>> userTasks = new Dictionary<long, List<Task>>();
         private static List<Pipe> pipesToUpdate = new List<Pipe>();
         private static List<Weld> weldsToUpdate = new List<Weld>();
@@ -134,6 +136,10 @@ namespace LoadRunner
             string[] downMinMax = parsedArgs.DownTimeSec.Split(':');
             downMin = int.Parse(downMinMax[0]);
             downMax = int.Parse(downMinMax[1]);
+
+            string[] appMinMax = parsedArgs.AppProcessingTime.Split(':');
+            appProcTimeMin = int.Parse(appMinMax[0]);
+            appProcTimeMax = int.Parse(appMinMax[1]);
 
             if (parsedArgs.Op == CommandLineArgs.Operation.PipeUpdate || parsedArgs.Op == CommandLineArgs.Operation.PipeUpdateRefresh)
             {
@@ -243,38 +249,48 @@ namespace LoadRunner
             long vendorID = job.VendorID;
             long numPages = jobNumPages[job.JobID];
 
+            Stopwatch watch = new Stopwatch();
+            
+
+            string where = string.Format("WHERE Vendor_ID = {0} AND Job_ID = {1}", vendorID, job.JobID);
+            string sortField = "Pipe_ID";
+            string sortDir = "ASC";
+            string pageSize = "1000";
+
+            //query for all the pipes
             for (int i = 0; i < numPages; i++)
             {
-                Stopwatch watch1 = new Stopwatch();
                 Stopwatch watch2 = new Stopwatch();
-                
-                string where = string.Format("WHERE Vendor_ID = {0} AND Job_ID = {1}", vendorID, job.JobID);
-                string sortField = "Pipe_ID";
-                string sortDir = "ASC";
-                string pageSize = "1000";
+                Console.WriteLine("Full refresh: getting pipes page {0}", i);
 
-                Console.WriteLine("Full refresh: getting page {0} for Job {1}", i, job.JobID);
-                service.AcceptCachedData = false;
-
-                watch1.Start();
-                Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, i.ToString(), pageSize, out total);
-                watch1.Stop();
-                Console.WriteLine("Retrieved {0} pipes for page {1} under job {2}: {3}", pipes.Length, i, job.JobID, watch1.Elapsed);
-
-                ProcessDataInApp(pipes.Length);
-
+                watch.Start();
                 watch2.Start();
-                Weld[] welds = service.SelectWeldsWithChildren(job.JobID, null, i, int.Parse(pageSize));
+                Pipe[] pipes = service.SelectPipesWithoutImageDataWithWelds(where, sortField, sortDir, i.ToString(), pageSize, out total);
                 watch2.Stop();
-                Console.WriteLine("Retrieved {0} welds for page {1} under job {2}: {3}", welds.Length, i, job.JobID, watch2.Elapsed);
+                watch.Stop();
 
-                ProcessDataInApp(welds.Length);
-
-                TimeSpan totalTime = watch1.Elapsed.Add(watch2.Elapsed);
-                requestTimes.Add(totalTime);
-
-                Console.WriteLine("Total time for full refresh: {0}", totalTime);
+                Console.WriteLine("Retrieved {0} pipes for page {1} under job {2}: {3}", pipes.Length, i, job.JobID, watch2.Elapsed);
+                ProcessDataInApp(pipes.Length);
             }
+
+            //query for all the welds
+            for (int i = 0; i < numPages; i++)
+            {
+                Stopwatch watch2 = new Stopwatch();
+
+                Console.WriteLine("Full refresh: getting welds page {0}", i);
+
+                watch.Start();
+                watch2.Start();
+                Weld[] welds = service.SelectWeldsWithChildren(job.JobID, null, i, 1000);
+                watch2.Stop();
+                watch.Stop();
+
+                Console.WriteLine("Retrieved {0} welds for page {1} under job {2}: {3}", welds.Length, i, job.JobID, watch2.Elapsed);
+                ProcessDataInApp(welds.Length);
+            }
+
+            requestTimes.Add(watch.Elapsed);
         }
 
 
@@ -455,8 +471,9 @@ namespace LoadRunner
 
         private static void ProcessDataInApp(int numRecs)
         {
-            int totalTime = parsedArgs.AppProcessingTime * numRecs;
-            Console.WriteLine("app will process {0} records for {1} milliseconds each, total time: {2} seconds", numRecs, parsedArgs.AppProcessingTime, totalTime/1000.0);
+            int appTime = rand.Next(appProcTimeMin, appProcTimeMax);
+            int totalTime = appTime * numRecs;
+            Console.WriteLine("app will process {0} records for {1} milliseconds each, total time: {2} seconds", numRecs, appTime, totalTime / 1000.0);
             System.Threading.Thread.Sleep(totalTime);
         }
 
@@ -677,10 +694,10 @@ namespace LoadRunner
 
         private static string GetChartDescriptionString(TimeSpan totalTime, double minTime, double maxTime, double avgTime)
         {
-            return string.Format("job: {0}, num pipes: {1},   threads: {2},   op: {3},   op count: {4},   stagger: {5},   downtime: {6}\n" +
-                "num requests: {7},   total time: {8},   min request: {9},   max request: {10},   avg request: {11}", job.Name, job.PipeCount,
-                parsedArgs.NumThreads, parsedArgs.Op, parsedArgs.NumOps, parsedArgs.StaggerUsers, parsedArgs.DownTimeSec, requestTimes.Count,
-                totalTime.ToString(@"hh\:mm\:ss\.ff"), FormatTime(minTime), FormatTime(maxTime), FormatTime(avgTime));
+            return string.Format("job: {0},   num pipes: {1},   threads: {2},   op: {3},   op count: {4},   stagger: {5},   downtime: {6},   app process time: {7}\n" +
+                "num requests: {8},   total time: {9},   min request: {10},   max request: {11},   avg request: {12}", job.Name, job.PipeCount,
+                parsedArgs.NumThreads, parsedArgs.Op, parsedArgs.NumOps, parsedArgs.StaggerUsers, parsedArgs.DownTimeSec, parsedArgs.AppProcessingTime,
+                requestTimes.Count, totalTime.ToString(@"hh\:mm\:ss\.ff"), FormatTime(minTime), FormatTime(maxTime), FormatTime(avgTime));
         }
 
 

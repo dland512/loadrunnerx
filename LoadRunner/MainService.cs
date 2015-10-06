@@ -15,8 +15,8 @@ namespace LoadRunner.localhost
         {
             WebRequest request = base.GetWebRequest(uri);
 
-            if (!AcceptCachedData)
-                request.Headers.Add("Cache-Control", "no-cache");
+            //if (!AcceptCachedData)
+                //request.Headers.Add("Cache-Control", "no-cache");
            
             return request;
         }

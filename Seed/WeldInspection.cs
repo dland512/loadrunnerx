@@ -62,7 +62,7 @@ namespace Seed.localhost
                     "{2}|" +     //Date_Performed
                     "{3}|" +     //Last_Updated
                     "{4}|" +     //Date_Created
-                    "nde|" +     //Inspection_Type
+                    "{5}|" +     //Inspection_Type
                     "|" +        //Modified_By_User_ID
                     "|" +        //Billable_Txn_Details_ID
                     "{5}|" +     //Delayed
@@ -71,7 +71,7 @@ namespace Seed.localhost
                     "{8}|" +     //Rig
                     "{9}",       //Crew
                     WeldInspectionID, WeldID, DateTime.Now.Formatted(), DateTime.Now.Formatted(),
-                    DateTime.Now.Formatted(), 0, 1, Spread, Rig, Crew);
+                    DateTime.Now.Formatted(), InspectionType, Delayed, Passed, Spread, Rig, Crew);
             }
         }
     }
